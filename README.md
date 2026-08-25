@@ -39,7 +39,6 @@ environment, with defaults relative to the repository:
 
     <parent>/release_paper/        this repo
     <parent>/data/dataset_v6/      AFSeq day rasters          AFSEQ_DATA
-    <parent>/data/fires_active_v4/ AFSeq daily active masks   AFSEQ_ACTIVE
     <parent>/data/dataset_v6_cache decoded copy (optional)    AFSEQ_CACHE
     <parent>/data/wstsplus/hdf5/   WSTS+ HDF5 (exp1/4/5 only) WSTS_HDF5
     <parent>/runs/                 outputs                    RUNS_DIR
@@ -48,7 +47,9 @@ environment, with defaults relative to the repository:
 exports; write one per machine and `source` it before launching. Splits,
 channel means and the fusion statistics ship inside the repo (dataset/splits,
 dataset/channel_means_v5.json, experiments/exp4/afseq_channel_stats.json).
-Nothing is imported from outside the repository any more: the AFSeq loader is
+Each event day holds `active-fire.tif` (the daily VIIRS active-fire mask, target
+and fire channel), `climate.tif` and `reflectance.tif`; `dem.tif` and
+`vegetation.tif` per event. Nothing is imported from outside the repository any more: the AFSeq loader is
 dataset/afseq_loader.py and the losses are training/losses.py.
 The dataset the paper uses is what `dataset/build_afseq.py --phase all`
 leaves behind: its last phase, `curate` (dataset/curate.py), moves duplicated
@@ -57,7 +58,7 @@ in `<tree>/excluded.json`; `dataset/make_splits.py` only splits what is left.
 `requirements.txt` lists the direct dependencies with the versions used here;
 torch is unpinned because its build follows the driver.
 
-To move: this repository, data/dataset_v6 and data/fires_active_v4 (850 MB
-together) reproduce exp2 and exp3. exp1, exp4 and exp5 also need
+To move: this repository and data/dataset_v6 (850 MB, covariates and the
+daily active-fire masks in one tree) reproduce exp2 and exp3. exp1, exp4 and exp5 also need
 the WSTS+ HDF5 (92 GB) and, for exp4's UTAE-AR/WSTS+ cell, the four
 best_AR_Veg_p4f{0-3} checkpoints (82 MB).

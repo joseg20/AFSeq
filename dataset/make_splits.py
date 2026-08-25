@@ -30,7 +30,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from paths import AFSEQ, AFSEQ_ACTIVE, SPLITS_DIR  # noqa: E402
+from paths import AFSEQ, SPLITS_DIR  # noqa: E402
 from dataset.curate import fire_stats, overlap, persistence_ap as ap_of  # noqa: E402
 
 SPLIT_DIR = SPLITS_DIR                 # dataset/splits, shipped with the code
@@ -154,7 +154,7 @@ def main():
     if a.stats.exists():
         stats = json.loads(a.stats.read_text())
     else:
-        stats = fire_stats(AFSEQ, AFSEQ_ACTIVE)
+        stats = fire_stats(AFSEQ)
         a.stats.write_text(json.dumps(stats))
     fids = sorted(stats)
     print(f"{len(fids)} eventos en {AFSEQ}; persistencia estimada del conjunto: "

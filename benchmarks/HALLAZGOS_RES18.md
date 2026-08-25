@@ -419,3 +419,19 @@ SNPP, y en muchos eventos heredado acumulado). Para que "un solo código"
 sea literal, la fase `fire` del build debería producir ese producto y el
 loader leerlo del propio árbol.
 
+## 13. El target vive en el árbol del dataset (25/08, ok del director)
+
+Deprecado el segundo árbol `fires_active_v4` y `AFSEQ_ACTIVE`. Ahora:
+`build_afseq.py --phase fire` escribe `<id>/<fecha>/active-fire.tif` (SNPP ∪
+NOAA-20, un solo día, 0 donde no hay detección — la lógica de
+`create-dataset/generate_active.py` traída al release); el loader lee canal 16
+y target de ahí; `curate`, `make_splits`, la caché y todos los experimentos
+miran un solo árbol. `--phase adopt-active --active <dir>` copió las 13.885
+máscaras existentes (bytes idénticos) a dataset_v6 y las 1.765 de los
+excluidos. Verificado: loader viejo (dos árboles) vs nuevo (uno) idénticos en
+120 muestras con los mismos índices; caché idéntica; persistencia 0,1733 /
+0,1595 / 0,1695 exacta. Los `fire-mask.tif` antiguos (acumulados, SNPP) quedan
+en disco sin uso; el build ya no los escribe. `curate` es idempotente
+(`excluded.json` como guardia). Tarball para mover: `$WSP_DATA/afseq_v6.tar.zst`
+(485 MB, md5 deff1204c6eb243cccdc56786ddd59f4).
+

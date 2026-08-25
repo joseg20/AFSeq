@@ -2,7 +2,7 @@
 """Curation of a built AFSeq tree: what leaves the dataset, and why.
 
     python dataset/build_afseq.py --out <tree> --phase curate      # normal way
-    python dataset/curate.py --out <tree> --active <masks> [--dry-run]
+    python dataset/curate.py --out <tree> [--dry-run]
 
 Runs last in `build_afseq.py --phase all`, so the tree the download produces
 is already the dataset the paper uses; `dataset/make_splits.py` only splits
@@ -26,9 +26,12 @@ what is left. Two rules, both decided on 2026-08-25 with the numbers below:
    random 64-px crops, four per day, the way the loader scores it; the count
    is deterministic (days sorted, one RNG per event seeded by its id).
 
-Nothing is deleted: excluded events move to `<tree>_excluded/<reason>/<id>`
-(and the same for the mask tree), and `<tree>/excluded.json` records every id
-with its reason and the parameters. `--dry-run` only prints the lists.
+Nothing is deleted: excluded events move to `<tree>_excluded/<reason>/<id>`,
+and `<tree>/excluded.json` records every id with its reason and the
+parameters. A tree that already has excluded.json is left alone (the rules
+are not idempotent: a second pass would take 15% of what is left) unless
+`--force`. `--dry-run` only prints the lists. Masks are read from
+`<tree>/<id>/<date>/active-fire.tif`, the product build_afseq.py writes.
 """
 from __future__ import annotations
 
@@ -46,7 +49,7 @@ import rasterio
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from paths import AFSEQ, AFSEQ_ACTIVE  # noqa: E402
+from paths import AFSEQ  # noqa: E402
 
 DROP_DEFAULT = {"US": 0.15}
 
@@ -69,49 +72,48 @@ def region_of(tree: Path, fid: str) -> str:
     return "US" if lon < -30 else "S.Europe"
 
 
-def _masks(active: Path, fid: str) -> dict:
+def _masks(tree: Path, fid: str) -> dict:
+    """{date: bool mask} from <tree>/<fid>/<date>/active-fire.tif."""
     out = {}
-    for p in sorted((Path(active) / fid).glob("*.tif")):
+    for p in sorted((Path(tree) / fid).glob("*/active-fire.tif")):
         with rasterio.open(p) as r:
-            out[p.stem] = r.read(1) > 0.5
+            out[p.parent.name] = r.read(1) > 0.5
     return out
 
 
 # ------------------------------------------------------------ rule 1: twins
-def duplicate_events(active: Path) -> dict:
+def duplicate_events(tree: Path) -> dict:
     """{duplicate id: original id}; same footprint, shape and mask dates."""
     groups = {}
-    for fid in events_of(active):
-        ds = tuple(sorted(p.stem for p in (Path(active) / fid).glob("*.tif")))
+    for fid in events_of(tree):
+        ds = tuple(sorted(p.parent.name
+                          for p in (Path(tree) / fid).glob("*/active-fire.tif")))
         if not ds:
             continue
-        with rasterio.open(Path(active) / fid / f"{ds[0]}.tif") as r:
+        with rasterio.open(Path(tree) / fid / ds[0] / "active-fire.tif") as r:
             key = (tuple(round(b, 5) for b in r.bounds), r.shape, ds)
         groups.setdefault(key, []).append(fid)
     return {d: ids[0] for ids in groups.values() for d in ids[1:]}
 
 
 # ------------------------------------------------- rule 2: slow US fronts
-def fire_stats(tree: Path, active: Path, fids=None, patch: int = 64,
-               crops: int = 4) -> dict:
+def fire_stats(tree: Path, fids=None, patch: int = 64, crops: int = 4) -> dict:
     """Per event: TP/FP/FN/P/N of "tomorrow = today", days, burned, region.
 
     Counted inside random `patch`-sized crops, `crops` per sampled day (fire
     on t, mask and covariates on t+1), because that is what gets scored.
     """
-    tree, active = Path(tree), Path(active)
+    tree = Path(tree)
     out = {}
     for fid in (fids or events_of(tree)):
         rng = np.random.default_rng(zlib.crc32(fid.encode()))
-        masks = _masks(active, fid)
+        masks = _masks(tree, fid)
         TP = FP = FN = P = N = days = 0
         for d in sorted(masks):
             nd = (datetime.strptime(d, "%Y-%m-%d")
                   + timedelta(days=1)).strftime("%Y-%m-%d")
             m = masks[d]
-            if nd not in masks or not (tree / fid / d).is_dir() \
-                    or not (tree / fid / nd / "fire-mask.tif").exists() \
-                    or not m.any():
+            if nd not in masks or not m.any():      # sampler: fire on t, mask on t+1
                 continue
             y = masks[nd]
             days += 1
@@ -158,13 +160,16 @@ def persistence_ap(stats: dict, fids) -> float:
 
 
 # ---------------------------------------------------------------- driver
-def curate(tree: Path, active: Path, drop: dict = DROP_DEFAULT,
-           dry_run: bool = False) -> dict:
-    tree, active = Path(tree), Path(active)
+def curate(tree: Path, drop: dict = DROP_DEFAULT, dry_run: bool = False,
+           force: bool = False) -> dict:
+    tree = Path(tree)
+    if (tree / "excluded.json").exists() and not force and not dry_run:
+        print(f"{tree} ya esta curado ({tree / 'excluded.json'}); --force para repetir")
+        return json.loads((tree / "excluded.json").read_text())
     before = events_of(tree)
-    dups = duplicate_events(active)
+    dups = duplicate_events(tree)
     kept = [f for f in before if f not in dups]
-    stats = fire_stats(tree, active, kept)
+    stats = fire_stats(tree, kept)
     slow = most_persistent(stats, drop)
     excluded = {**{d: dict(reason="duplicate", of=o) for d, o in dups.items()},
                 **{f: dict(reason="persistent", region=r,
@@ -186,32 +191,28 @@ def curate(tree: Path, active: Path, drop: dict = DROP_DEFAULT,
         return dict(summary=summary, excluded=excluded)
 
     for fid, why in sorted(excluded.items()):
-        for root in (tree, active):
-            src = root / fid
-            if not src.exists() and not src.is_symlink():
-                continue
-            dst = Path(str(root).rstrip("/") + "_excluded") / why["reason"] / fid
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dst))
+        src = tree / fid
+        dst = Path(str(tree).rstrip("/") + "_excluded") / why["reason"] / fid
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
     (tree / "excluded.json").write_text(json.dumps(
         dict(date=datetime.now().strftime("%F"), summary=summary,
              events=excluded), indent=1))
-    print(f"{len(excluded)} eventos movidos a {tree}_excluded/ y "
-          f"{active}_excluded/; registro en {tree}/excluded.json")
+    print(f"{len(excluded)} eventos movidos a {tree}_excluded/; "
+          f"registro en {tree}/excluded.json")
     return dict(summary=summary, excluded=excluded)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, default=AFSEQ, help="arbol del dataset")
-    ap.add_argument("--active", type=Path, default=AFSEQ_ACTIVE,
-                    help="arbol de mascaras activas diarias")
     ap.add_argument("--drop", nargs="+", metavar="REGION=FRAC",
                     default=[f"{k}={v}" for k, v in DROP_DEFAULT.items()])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
     drop = {k: float(v) for k, v in (d.split("=") for d in a.drop)}
-    curate(a.out, a.active, drop, a.dry_run)
+    curate(a.out, drop, a.dry_run, a.force)
 
 
 if __name__ == "__main__":

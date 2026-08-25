@@ -69,7 +69,7 @@ for _p in (ROOT, ROOT / "models", ROOT / "training", ROOT / "benchmarks",
     sys.path.insert(0, str(_p))
 
 from runner import Job, run_queue                              # noqa: E402
-from paths import AFSEQ, AFSEQ_ACTIVE, RUNS, SPLITS_DIR       # noqa: E402
+from paths import AFSEQ, RUNS, SPLITS_DIR                     # noqa: E402
 from evaluation.metrics import pooled_ap_gpu                   # noqa: E402
 from train import (SINGLE_STEP, build_model, forward,          # noqa: E402
                    last_real_frame, to_logits)
@@ -140,9 +140,8 @@ def afseq_loader(splits_file, patch=64, max_history=16, horizon=1,
     from dataset.afseq_cache import install_if_configured
     install_if_configured(afseq_loader)    # only if AFSEQ_CACHE is set
 
-    ids = dl_ids(load_ids("Test", splits_file), AFSEQ_ACTIVE)
-    ds = Seq2SeqActivePadded(ids, str(AFSEQ), str(AFSEQ_ACTIVE), patch,
-                             max_history, horizon)
+    ids = dl_ids(load_ids("Test", splits_file), AFSEQ)
+    ds = Seq2SeqActivePadded(ids, str(AFSEQ), patch, max_history, horizon)
     return DataLoader(ds, batch_size=batch_size, shuffle=False,
                       num_workers=workers, pin_memory=True,
                       collate_fn=lambda b: collate_padded(b, 0.0))

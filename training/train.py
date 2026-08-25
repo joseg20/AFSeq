@@ -69,7 +69,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "models"))
 
-from paths import (AFSEQ, AFSEQ_ACTIVE, AFSEQ_SPLITS,
+from paths import (AFSEQ, AFSEQ_SPLITS,
                    RUNS, SEED)  # noqa: E402
 from evaluation.metrics import pooled_ap_gpu                     # noqa: E402
 
@@ -322,9 +322,8 @@ def main():
         in_ch = 40 if keep is None else len(keep)
     else:
         def split(name):
-            ids = dl_ids(load_ids(name, str(AFSEQ_SPLITS)), AFSEQ_ACTIVE)
-            return Seq2SeqActivePadded(ids, str(AFSEQ),
-                                       str(AFSEQ_ACTIVE), args.patch,
+            ids = dl_ids(load_ids(name, str(AFSEQ_SPLITS)), AFSEQ)
+            return Seq2SeqActivePadded(ids, str(AFSEQ), args.patch,
                                        args.max_history, H)
 
         coll = lambda b: collate_padded(b, 0.0)                  # noqa: E731

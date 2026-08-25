@@ -26,7 +26,8 @@ protocol: a sample needs fire on day t and at least one observed day after.
 THE RASTER STACK (get_features). Per fire day: dem.tif (elevation, slope,
 aspect), vegetation.tif (land cover, NDVI, EVI, ET), climate.tif (7 bands),
 reflectance.tif (VIIRS I1, I2, bilinearly resampled to the fire grid) and the
-day's fire-mask.tif, every band min-max normalised into [0, 1] with the fixed
+day's active-fire.tif (SNPP + NOAA-20 detections of that day, 0 elsewhere),
+every band min-max normalised into [0, 1] with the fixed
 ranges below. A hole is NaN on disk (dataset/build_afseq.py never writes a
 plausible constant) and is imputed here with the channel's TRAIN mean
 (dataset/channel_means_v5.json): 0 would be the bottom of every range. The
@@ -241,7 +242,7 @@ def get_features(id_dir, fire_date):
     
     # Verificar máscara del día siguiente (etiqueta Y)
     next_date = (datetime.strptime(fire_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    fire_mask_path = id_dir / next_date / 'fire-mask.tif'
+    fire_mask_path = id_dir / next_date / 'active-fire.tif'
     if not fire_mask_path.exists():
         return None, None
 
@@ -286,7 +287,7 @@ def get_features(id_dir, fire_date):
             reflectance = np.full((2, *target_shape), np.nan)
 
         # Máscara de hoy (feature)
-        today_path = date_path / "fire-mask.tif"
+        today_path = date_path / "active-fire.tif"
         if not today_path.exists(): return None, None
         today_fire_mask = load_raster(today_path)[0]
 
@@ -301,24 +302,25 @@ def get_features(id_dir, fire_date):
 
 # ----------------------------------------------------------------- dataset
 class Seq2SeqActivePadded(Dataset):
-    def __init__(self, ids, DATASET, ACTIVE, patch_size=64, max_seq_len=16,
+    def __init__(self, ids, DATASET, patch_size=64, max_seq_len=16,
                  horizon=8, require_fire_on_t=True):
         # require_fire_on_t=True is AFSeq's protocol and the default, so every
         # existing experiment is untouched. False also emits the windows WSTS
         # emits and we never do -- ignition (nothing at t, fire at t+1),
         # extinction and empty -- which are 30.9% of their test and 0% of ours.
-        self.DATASET = Path(DATASET); self.ACTIVE = Path(ACTIVE)
+        self.DATASET = Path(DATASET)
         self.ph = patch_size; self.max_seq_len = max_seq_len; self.H = horizon
         self.samples = []
         for fid in ids:
-            adir = self.ACTIVE / fid; iddir = self.DATASET / fid
-            if not adir.is_dir() or not iddir.is_dir():
+            iddir = self.DATASET / fid
+            if not iddir.is_dir():
                 continue
-            dates = sorted(p.stem for p in adir.glob("*.tif") if (iddir / p.stem).is_dir())
+            # a day exists when it has its daily active-fire mask
+            dates = sorted(p.parent.name for p in iddir.glob("*/active-fire.tif"))
             has_fire = {}
             for dt in dates:
                 try:
-                    m, _ = load_raster(adir / f"{dt}.tif"); has_fire[dt] = bool((m[0] > 0.5).any())
+                    m, _ = load_raster(iddir / dt / "active-fire.tif"); has_fire[dt] = bool((m[0] > 0.5).any())
                 except Exception:
                     has_fire[dt] = False
             for idx, date in enumerate(dates):
@@ -328,7 +330,7 @@ class Seq2SeqActivePadded(Dataset):
                 future, d = [], date
                 for _ in range(self.H):
                     nd = _add(d, 1)
-                    if not (adir / f"{nd}.tif").exists():
+                    if not (iddir / nd / "active-fire.tif").exists():
                         break
                     future.append(nd); d = nd
                 if len(future) < 1:     # necesita >=1 día futuro (no >=H)
@@ -340,7 +342,7 @@ class Seq2SeqActivePadded(Dataset):
         return len(self.samples)
 
     def _active(self, fid, date):
-        m, _ = load_raster(self.ACTIVE / fid / f"{date}.tif")
+        m, _ = load_raster(self.DATASET / fid / date / "active-fire.tif")
         return (m[0] > 0.5).astype(np.float32)
 
     def __getitem__(self, idx):
@@ -430,8 +432,8 @@ def load_ids(section: str, splits_file) -> list:
     return out
 
 
-def dl_ids(ids: list, active) -> list:
-    """Keep the ids that have at least one active-fire mask on disk."""
-    active = Path(active)
+def dl_ids(ids: list, dataset) -> list:
+    """Keep the ids that have at least one daily active-fire mask on disk."""
+    dataset = Path(dataset)
     return [i for i in ids
-            if (active / i).is_dir() and any((active / i).glob("*.tif"))]
+            if (dataset / i).is_dir() and any((dataset / i).glob("*/active-fire.tif"))]

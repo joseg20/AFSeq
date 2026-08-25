@@ -104,7 +104,7 @@ from torch.utils.data import DataLoader, Dataset
 
 RELEASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RELEASE))
-from paths import AFSEQ, AFSEQ_ACTIVE, AFSEQ_SPLITS  # noqa: E402
+from paths import AFSEQ, AFSEQ_SPLITS  # noqa: E402
 
 
 # AFSeq's 17 channels, from utils.get_features:
@@ -146,10 +146,10 @@ def load_ids(section: str, splits_file) -> list:
     return out
 
 
-def dl_ids(ids: list, active) -> list:
-    active = pathlib.Path(active)
+def dl_ids(ids: list, dataset) -> list:
+    dataset = pathlib.Path(dataset)
     return [i for i in ids
-            if (active / i).is_dir() and any((active / i).glob("*.tif"))]
+            if (dataset / i).is_dir() and any((dataset / i).glob("*/active-fire.tif"))]
 
 
 class _TheirShape(Dataset):
@@ -222,10 +222,9 @@ class AFSeqDataModule(pl.LightningDataModule):
         for name in ("Train", "Val", "Test"):
             if name in self._sets:
                 continue
-            ids = dl_ids(load_ids(name, splits), AFSEQ_ACTIVE)
+            ids = dl_ids(load_ids(name, splits))
             inner = Seq2SeqActivePadded(
-                ids, str(AFSEQ), str(AFSEQ_ACTIVE),
-                self.hparams.patch, self.hparams.max_history,
+                ids, str(AFSEQ), self.hparams.patch, self.hparams.max_history,
                 horizon=1,               # these models predict t+1 only
             )
             self._sets[name] = _TheirShape(

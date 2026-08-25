@@ -11,10 +11,12 @@ here, so this file -- not a sequence of patches -- is what defines the dataset.
     python build_afseq.py --out /path/dataset_v6 --phase climate --workers 16
     python build_afseq.py --out /path/dataset_v6 --phase audit
     python build_afseq.py --out /path/dataset_v6 --phase curate   # last step of "all"
+    python build_afseq.py --out /path/dataset_v6 --phase adopt-active --active <dir>
+                                    # one-off: take masks from a separate tree
 
 Layout produced, per event and per day:
     <out>/<id>/info.geojson  contour.geojson  dem.tif  vegetation.tif
-    <out>/<id>/<YYYY-MM-DD>/fire-mask.tif  climate.tif  reflectance.tif
+    <out>/<id>/<YYYY-MM-DD>/active-fire.tif  climate.tif  reflectance.tif
 
 THE RULE THIS PIPELINE EXISTS TO ENFORCE: never write a plausible constant for
 missing data. The previous version answered an empty collection with
@@ -63,6 +65,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import shutil
 import math
 import os
 import random
@@ -83,6 +86,7 @@ import ee
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from paths import EE_PROJECT as PROJECT, AFSEQ as DEFAULT_OUT  # noqa: E402
 FIRE_PRODUCT = "NASA/LANCE/SNPP_VIIRS/C2"
+FIRE_PRODUCT_N20 = "NASA/LANCE/NOAA20_VIIRS/C2"   # same instrument, 50 min apart
 LST_PRODUCT = "MODIS/061/MYD11A1"          # Aqua 13:30, see module docstring
 LST_BAND = "LST_Day_1km"
 LST_HOUR_LOCAL = 13.5
@@ -173,19 +177,28 @@ def write_tif(path: Path, arr, profile):
 
 # ----------------------------------------------------------------- fire mask
 def fetch_fire(region, date, out_path):
+    """The DAILY ACTIVE-FIRE mask: VIIRS detections of that one day only.
+
+    SNPP and NOAA-20 together: same instrument, same 375 m, two looks per day
+    instead of one (recovers 11.5% of the gaps that a single satellite enters
+    as "no fire" when it means "not observed"). This is the target and the
+    fire channel of every model; there is no cumulative product any more.
+    Pixels with no detection are 0, never NaN: absence of fire is a value.
+    """
     start = ee.Date(date)
-    col = (ee.ImageCollection(FIRE_PRODUCT)
-           .filterBounds(region)
-           .filterDate(start, start.advance(1, "day")))
+    col = (ee.ImageCollection(FIRE_PRODUCT).filterBounds(region)
+           .filterDate(start, start.advance(1, "day"))
+           .merge(ee.ImageCollection(FIRE_PRODUCT_N20).filterBounds(region)
+                  .filterDate(start, start.advance(1, "day"))))
     if retry(lambda: col.size().getInfo()) == 0:
         raise NoData("sin paso de VIIRS")
-    mask = col.map(lambda im: im.select("Bright_ti5").gt(279).rename("burned")) \
-              .mosaic().clip(region)
+    fire = col.map(lambda im: im.select("Bright_ti5").gt(279).rename("burned")).mosaic()
+    mask = ee.Image.constant(0).rename("burned").blend(fire).clip(region).toFloat()
     data = retry(download, mask, region, SCALE_FIRE)
     with rasterio.open(io.BytesIO(data)) as s:
         arr, prof = s.read().astype("float64"), s.profile.copy()
     write_tif(out_path, arr, prof)
-    return "viirs"
+    return "viirs_snpp+n20"
 
 
 # -------------------------------------------------------------------- climate
@@ -434,7 +447,7 @@ def region_of(event_dir: Path):
     for day in sorted(event_dir.iterdir()):
         if not day.is_dir():
             continue
-        for name in ("fire-mask.tif", "climate.tif", "reflectance.tif"):
+        for name in ("active-fire.tif", "climate.tif", "reflectance.tif"):
             p = day / name
             if p.exists():
                 with rasterio.open(p) as r:
@@ -449,7 +462,7 @@ def region_of(event_dir: Path):
 
 
 NEEDS = {
-    "fire": ("fire-mask.tif", fetch_fire),
+    "fire": ("active-fire.tif", fetch_fire),
     "climate": ("climate.tif", fetch_climate),
     "reflect": ("reflectance.tif", fetch_reflectance),
 }
@@ -605,10 +618,10 @@ def main():
                     help="arbol del dataset (por defecto, paths.AFSEQ)")
     ap.add_argument("--phase", default="all",
                     choices=["all", "events", "static", "fire", "climate",
-                             "reflect", "audit", "curate"])
+                             "reflect", "audit", "curate", "adopt-active"])
     ap.add_argument("--active", type=Path, default=None,
-                    help="arbol de mascaras activas diarias para --phase curate "
-                         "(por defecto, paths.AFSEQ_ACTIVE)")
+                    help="adopt-active: arbol <id>/<fecha>.tif de mascaras ya "
+                         "descargadas, copiadas a <out>/<id>/<fecha>/active-fire.tif")
     ap.add_argument("--drop", nargs="+", metavar="REGION=FRAC", default=None,
                     help="curate: fraccion de eventos mas persistentes a excluir "
                          "por region (por defecto US=0.15, ver dataset/curate.py)")
@@ -625,6 +638,8 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "curate":
         return run_curate(args)
+    if args.phase == "adopt-active":
+        return adopt_active(args.out, args.active)
     ee.Initialize(project=PROJECT)
     if args.phase == "audit":
         audit(args.out)
@@ -648,10 +663,32 @@ def main():
 def run_curate(args):
     """Duplicates out, the most persistent US events out; see dataset/curate.py."""
     from dataset.curate import DROP_DEFAULT, curate
-    from paths import AFSEQ_ACTIVE
     drop = ({k: float(v) for k, v in (d.split("=") for d in args.drop)}
             if args.drop else DROP_DEFAULT)
-    curate(args.out, args.active or AFSEQ_ACTIVE, drop)
+    curate(args.out, drop)
+    return 0
+
+
+def adopt_active(out: Path, active: Path):
+    """Copy an existing <active>/<id>/<date>.tif tree into the dataset tree.
+
+    Until 2026-08-25 the daily active masks lived in a second tree
+    (create-dataset/fires_active_v4, made by generate_active.py with the same
+    product fetch_fire now downloads). This folds such a tree in, so the
+    dataset directory is self-contained; it is a copy, bytes unchanged.
+    """
+    if not active:
+        raise SystemExit("--phase adopt-active necesita --active <arbol>")
+    n = miss = 0
+    for ev in sorted(p for p in Path(active).iterdir() if p.name.startswith("id_")):
+        for t in sorted(ev.glob("*.tif")):
+            ddir = out / ev.name / t.stem
+            if not ddir.is_dir():
+                miss += 1
+                continue
+            shutil.copyfile(t, ddir / "active-fire.tif")
+            n += 1
+    log(f"adopt-active: {n} mascaras copiadas a {out}, {miss} sin directorio de dia")
     return 0
 
 

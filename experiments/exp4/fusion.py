@@ -49,7 +49,7 @@ for _p in (ROOT, ROOT / "benchmarks", str(HERE)):
         sys.path.insert(0, str(_p))
 
 from channels import N_VEG, afseq_to_veg, wstsplus_to_veg     # noqa: E402
-from paths import AFSEQ, AFSEQ_ACTIVE, AFSEQ_SPLITS, WSTS_HDF5  # noqa: E402
+from paths import AFSEQ, AFSEQ_SPLITS, WSTS_HDF5  # noqa: E402
 
 T_HIST = 5
 H_DEFAULT = 5
@@ -108,9 +108,8 @@ class _AFSeqVeg(Dataset):
         from afseq_datamodule import dl_ids, load_ids
 
         section = {"train": "Train", "val": "Val", "test": "Test"}[part]
-        ids = dl_ids(load_ids(section, str(AFSEQ_SPLITS)), AFSEQ_ACTIVE)
-        self.base = Seq2SeqActivePadded(ids, str(AFSEQ), str(AFSEQ_ACTIVE),
-                                        crop, max_seq, horizon)
+        ids = dl_ids(load_ids(section, str(AFSEQ_SPLITS)))
+        self.base = Seq2SeqActivePadded(ids, str(AFSEQ), crop, max_seq, horizon)
         self.mean, self.std = _afseq_stats()
         self.drop_refl = drop_refl
 

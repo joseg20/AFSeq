@@ -15,10 +15,10 @@ is why every AFSeq run here is CPU-bound while we are asked to use fewer cores.
 WHAT IT STORES. Exactly what the loader would have computed, once:
 
     <cache>/<fid>/<date>.npy          get_features(...)[0]   float32 (17, H, W)
-    <cache>/<fid>/active/<date>.npy   load_raster(ACTIVE/<fid>/<date>.tif)[0][0]
+    <cache>/<fid>/active/<date>.npy   load_raster(<fid>/<date>/active-fire.tif)[0][0]
     <cache>/<fid>/DONE                the fire was fully processed
 
-A day that get_features answers with None (no fire-mask for the next day, a
+A day that get_features answers with None (no active-fire mask the next day, a
 missing static layer, an exception it swallows) is simply absent, and the
 cached call answers None too. The whole thing is 4.6 GB.
 
@@ -47,7 +47,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from paths import AFSEQ, AFSEQ_ACTIVE, AFSEQ_CACHE, SPLITS_DIR  # noqa: E402
+from paths import AFSEQ, AFSEQ_CACHE, SPLITS_DIR  # noqa: E402
 
 
 # ------------------------------------------------------------------ building
@@ -57,7 +57,7 @@ def _fire_dirs(afseq: Path) -> list[Path]:
 
 def _build_fire(args) -> tuple[str, int, int]:
     """Decode one fire. Returns (fid, days written, days answered None)."""
-    fid, afseq, active, cache = args
+    fid, afseq, cache = args
     from dataset.afseq_loader import get_features, load_raster
 
     iddir = afseq / fid
@@ -71,7 +71,7 @@ def _build_fire(args) -> tuple[str, int, int]:
         else:
             np.save(out / f"{day}.npy", X.astype(np.float32, copy=False))
             written += 1
-        tif = active / fid / f"{day}.tif"
+        tif = iddir / day / "active-fire.tif"
         if tif.exists():
             m, _ = load_raster(tif)
             np.save(out / "active" / f"{day}.npy", m[0])
@@ -79,15 +79,15 @@ def _build_fire(args) -> tuple[str, int, int]:
     return fid, written, missing
 
 
-def build(afseq: Path = AFSEQ, active: Path = AFSEQ_ACTIVE,
-          cache: Path = AFSEQ_CACHE, procs: int = 4, force: bool = False):
+def build(afseq: Path = AFSEQ, cache: Path = AFSEQ_CACHE, procs: int = 4,
+          force: bool = False):
     cache.mkdir(parents=True, exist_ok=True)
     fids = [p.name for p in _fire_dirs(afseq)]
     todo = [f for f in fids if force or not (cache / f / "DONE").exists()]
     print(f"{len(fids)} fuegos, {len(fids) - len(todo)} ya en cache, "
           f"{len(todo)} por decodificar -> {cache}")
     t0 = time.time()
-    jobs = [(f, afseq, active, cache) for f in todo]
+    jobs = [(f, afseq, cache) for f in todo]
     written = missing = 0
     with Pool(procs) as pool:
         for i, (fid, w, m) in enumerate(pool.imap_unordered(_build_fire, jobs), 1):
@@ -126,8 +126,8 @@ def install(module, cache: Path = AFSEQ_CACHE, afseq: Path = AFSEQ):
         return np.load(f), None
 
     def load_raster(path):
-        path = Path(path)
-        f = cache / path.parent.name / "active" / (path.stem + ".npy")
+        path = Path(path)                        # <fid>/<date>/active-fire.tif
+        f = cache / path.parent.parent.name / "active" / (path.parent.name + ".npy")
         if not f.exists():
             raise FileNotFoundError(f"{path} no esta en la cache ({f})")
         return np.load(f)[None], None
@@ -161,9 +161,8 @@ def check(n: int, splits_file, horizon: int = 5, patch=64, max_history=16):
     raw_fns = (dap.get_features, dap.load_raster)
     ok = True
     for section in ("Train", "Val", "Test"):
-        ids = dl_ids(load_ids(section, splits_file), AFSEQ_ACTIVE)
-        ds = dap.Seq2SeqActivePadded(ids, str(AFSEQ), str(AFSEQ_ACTIVE),
-                                     patch, max_history, horizon)
+        ids = dl_ids(load_ids(section, splits_file), AFSEQ)
+        ds = dap.Seq2SeqActivePadded(ids, str(AFSEQ), patch, max_history, horizon)
         random.seed(0)
         idxs = random.sample(range(len(ds)), min(n, len(ds)))
 
