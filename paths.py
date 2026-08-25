@@ -59,11 +59,12 @@ SEED = int(os.environ.get("SEED", 23))
 ANCHORS = {
     "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,   # paper Table 3: 0.429
     "utae_ar_afseq_t1": 0.432,                      # 3-seed mean
-    # 0.169 +- 0.004 (3 seeds): exp2.py --table --rows persistence on the v6
-    # splits (dataset/splits, 1,194 events: no duplicates, no 15% most
-    # persistent US fires), the protocol every Table 2 row is scored under. With all 1,301 events it is 0.252 +- 0.014. The 0.198
+    # 0.167 +- 0.007 (3 seeds): exp2.py --table --rows persistence on the v6
+    # splits (dataset/splits; 1,194 events after build_afseq --phase curate:
+    # no duplicates, no 15% most persistent US fires), the protocol every
+    # Table 2 row is scored under. With all 1,301 events it is 0.252 +- 0.014. The 0.198
     # the paper once quoted was measured on a splits file whose fires no
     # longer all exist, so nothing in the release can reproduce it.
-    "persistence_afseq_t1": 0.169,
+    "persistence_afseq_t1": 0.167,
     "persistence_wsts_t1": 0.193,
 }

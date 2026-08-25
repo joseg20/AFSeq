@@ -50,6 +50,10 @@ channel means and the fusion statistics ship inside the repo (dataset/splits,
 dataset/channel_means_v5.json, experiments/exp4/afseq_channel_stats.json).
 Nothing is imported from outside the repository any more: the AFSeq loader is
 dataset/afseq_loader.py and the losses are training/losses.py.
+The dataset the paper uses is what `dataset/build_afseq.py --phase all`
+leaves behind: its last phase, `curate` (dataset/curate.py), moves duplicated
+events and the 15% most persistent US fires out of the tree and records them
+in `<tree>/excluded.json`; `dataset/make_splits.py` only splits what is left.
 `requirements.txt` lists the direct dependencies with the versions used here;
 torch is unpinned because its build follows the driver.
 

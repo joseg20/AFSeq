@@ -399,3 +399,23 @@ ráster completo porque las máscaras v4 añaden un foco de 48 px al norte en
 t+2 que no cabe en la ventana cuadrada de 64 columnas. Cifras para el caption:
 +1,012 new / −1,274 out (antes +920 / −1,227), 1.194 secuencias.
 
+## 12. La curación vive en la descarga (25/08, decisión del director)
+
+`make_splits.py` solo reparte. La exclusión de duplicados y del 15 % de USA
+más persistente es la fase `curate` de `build_afseq.py` (`dataset/curate.py`),
+última de `--phase all`: mueve los eventos a `<tree>_excluded/<motivo>/` (y lo
+mismo en el árbol de máscaras) y escribe `<tree>/excluded.json`. Es
+determinista (días ordenados, un RNG por evento sembrado con su id): frente a
+la versión anterior coincide en 72/74 persistentes (entran id_1623/id_1634,
+salen id_0923/id_1112). Aplicada a dataset_v6 el 25/08: 1.301 → **1.194**
+(33 + 74 fuera). Splits v6 regenerados sin ningún swap; persistencia real
+**0,173 / 0,160 / 0,170 → 0,167 ± 0,007**; por región (estimada) USA 0,168,
+Chile 0,173, S.Europa 0,156.
+
+Pendiente de diseño, no resuelto: el target (máscaras activas SNPP+NOAA-20 en
+la malla exacta, `fires_active_v4`) lo produce `create-dataset/generate_active.py`,
+fuera del release, y difiere del `fire-mask.tif` que escribe el build (solo
+SNPP, y en muchos eventos heredado acumulado). Para que "un solo código"
+sea literal, la fase `fire` del build debería producir ese producto y el
+loader leerlo del propio árbol.
+

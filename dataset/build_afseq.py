@@ -10,6 +10,7 @@ here, so this file -- not a sequence of patches -- is what defines the dataset.
     python build_afseq.py --out /path/new --phase all
     python build_afseq.py --out /path/dataset_v6 --phase climate --workers 16
     python build_afseq.py --out /path/dataset_v6 --phase audit
+    python build_afseq.py --out /path/dataset_v6 --phase curate   # last step of "all"
 
 Layout produced, per event and per day:
     <out>/<id>/info.geojson  contour.geojson  dem.tif  vegetation.tif
@@ -604,7 +605,13 @@ def main():
                     help="arbol del dataset (por defecto, paths.AFSEQ)")
     ap.add_argument("--phase", default="all",
                     choices=["all", "events", "static", "fire", "climate",
-                             "reflect", "audit"])
+                             "reflect", "audit", "curate"])
+    ap.add_argument("--active", type=Path, default=None,
+                    help="arbol de mascaras activas diarias para --phase curate "
+                         "(por defecto, paths.AFSEQ_ACTIVE)")
+    ap.add_argument("--drop", nargs="+", metavar="REGION=FRAC", default=None,
+                    help="curate: fraccion de eventos mas persistentes a excluir "
+                         "por region (por defecto US=0.15, ver dataset/curate.py)")
     ap.add_argument("--contours", type=Path,
                     help="GeoJSON de contornos, obligatorio para --phase events")
     ap.add_argument("--workers", type=int, default=12)
@@ -616,6 +623,8 @@ def main():
     if args.phase == "events" and not args.contours:
         raise SystemExit("--phase events necesita --contours <geojson>")
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.phase == "curate":
+        return run_curate(args)
     ee.Initialize(project=PROJECT)
     if args.phase == "audit":
         audit(args.out)
@@ -631,6 +640,18 @@ def main():
         else:
             run_phase(args.out, ph, args.workers, args.limit, args.force)
     audit(args.out)
+    if args.phase == "all":
+        run_curate(args)         # what leaves the dataset, and why: curate.py
+    return 0
+
+
+def run_curate(args):
+    """Duplicates out, the most persistent US events out; see dataset/curate.py."""
+    from dataset.curate import DROP_DEFAULT, curate
+    from paths import AFSEQ_ACTIVE
+    drop = ({k: float(v) for k, v in (d.split("=") for d in args.drop)}
+            if args.drop else DROP_DEFAULT)
+    curate(args.out, args.active or AFSEQ_ACTIVE, drop)
     return 0
 
 
