@@ -341,38 +341,98 @@ def fetch_reflectance(region, date, out_path, ref_path):
 
 
 # ------------------------------------------------------------------ static
+def utm_epsg(lon: float, lat: float) -> int:
+    zone = int((lon + 180) / 6) + 1
+    return 32600 + zone if lat >= 0 else 32700 + zone
+
+
 def fetch_static(region, event_dir: Path, force=False):
     """dem.tif and vegetation.tif, one pair per event (they never change).
 
-    vegetation.tif carries 4 bands: NDVI, EVI, land cover, ET -- the same
-    MODIS products the original features/vegetation.py used. No fallback: if a
-    product has nothing for this footprint the event is reported, not filled.
+    Both replicate the ORIGINAL feature scripts (features/dem.py and
+    features/vegetation.py), band for band, because the loader unpacks them
+    positionally (afseq_loader.normalize_dem / normalize_vegetation):
+
+      dem.tif         3 bands, float32, UTM zone of the event centre, ~30 m:
+                      elevation (m), slope (deg), aspect (deg, 0 = N,
+                      clockwise). SRTM GL1 v003 downloaded in EPSG:4326 at
+                      30 m, reprojected to UTM (bilinear), slope and aspect
+                      by Horn's kernels / (8 * pixel size).
+      vegetation.tif  4 bands at 200 m, EPSG:4326, in THIS order:
+                      land cover (MCD12Q1 LC_Type1, mode of the two years
+                      before the event), NDVI, EVI (MOD13Q1 mean of the 30
+                      days before start_date, raw x1e4), ET (MOD16A2 mean of
+                      the same 30 days).
+
+    2026-08-25: the first version of this function wrote elevation alone and
+    the vegetation in the order [NDVI, EVI, landcover, ET], averaged over the
+    whole collection. Nothing caught it until dataset_v7 was the first tree
+    built entirely by this file: every day failed to unpack the DEM and the
+    fire channel came out empty. The band order is now asserted at write time.
+    No fallback: if a product has nothing for this footprint the event is
+    reported, not filled.
     """
+    from scipy.ndimage import convolve
+    from rasterio.warp import calculate_default_transform
     made = []
+    info = json.loads((event_dir / "info.geojson").read_text())
+    props = info.get("properties") or info["features"][0]["properties"]
+    start = datetime.strptime(props["start_date"], "%Y-%m-%d")
+
     dem_p = event_dir / "dem.tif"
     if force or not dem_p.exists():
         srtm = ee.Image("USGS/SRTMGL1_003").select("elevation").clip(region)
         data = retry(download, srtm, region, 30)
         with rasterio.open(io.BytesIO(data)) as s_:
-            write_tif(dem_p, s_.read().astype("float64"), s_.profile.copy())
+            dem = s_.read(1).astype("float32")
+            src_tr, src_crs, b = s_.transform, s_.crs, s_.bounds
+        dst_crs = f"EPSG:{utm_epsg((b.left + b.right) / 2, (b.top + b.bottom) / 2)}"
+        dst_tr, w, h = calculate_default_transform(src_crs, dst_crs, dem.shape[1],
+                                                   dem.shape[0], *b)
+        dem_utm = np.zeros((h, w), dtype="float32")
+        reproject(source=dem, destination=dem_utm, src_transform=src_tr,
+                  src_crs=src_crs, dst_transform=dst_tr, dst_crs=dst_crs,
+                  resampling=Resampling.bilinear)
+        kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=float)
+        ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=float)
+        dx, dy = dst_tr.a, -dst_tr.e
+        dzdx = convolve(dem_utm, kx, mode="reflect") / (8.0 * dx)
+        dzdy = convolve(dem_utm, ky, mode="reflect") / (8.0 * dy)
+        slope = np.degrees(np.arctan(np.hypot(dzdx, dzdy)))
+        aspect = (np.degrees(np.arctan2(dzdy, -dzdx)) + 360) % 360
+        arr = np.stack([dem_utm, slope, aspect]).astype("float32")
+        assert arr.shape[0] == 3
+        prof = dict(driver="GTiff", height=h, width=w, count=3, dtype="float32",
+                    crs=dst_crs, transform=dst_tr, compress="deflate")
+        with rasterio.open(dem_p, "w", **prof) as d:
+            d.write(arr)
+            d.descriptions = ("elevation_m", "slope_deg", "aspect_deg")
         made.append("dem")
 
     veg_p = event_dir / "vegetation.tif"
     if force or not veg_p.exists():
-        mod13 = ee.ImageCollection("MODIS/061/MOD13Q1").filterBounds(region)
-        mcd12 = ee.ImageCollection("MODIS/061/MCD12Q1").filterBounds(region)
-        mod16 = ee.ImageCollection("MODIS/061/MOD16A2").filterBounds(region)
+        d0 = (start - timedelta(days=30)).strftime("%Y-%m-%d")
+        d1 = start.strftime("%Y-%m-%d")
+        d_lc = (start - timedelta(days=730)).strftime("%Y-%m-%d")
+        mod13 = ee.ImageCollection("MODIS/061/MOD13Q1").filterBounds(region).filterDate(d0, d1)
+        mcd12 = ee.ImageCollection("MODIS/061/MCD12Q1").filterBounds(region).filterDate(d_lc, d1)
+        mod16 = ee.ImageCollection("MODIS/061/MOD16A2").filterBounds(region).filterDate(d0, d1)
         if retry(lambda: mod13.size().getInfo()) == 0:
-            raise NoData("MOD13Q1 sin cobertura")
+            raise NoData("MOD13Q1 sin cobertura en los 30 dias previos")
         veg = ee.Image.cat([
+            mcd12.select("LC_Type1").mode().rename("landcover"),
             mod13.select("NDVI").mean().rename("NDVI"),
             mod13.select("EVI").mean().rename("EVI"),
-            mcd12.select("LC_Type1").mode().rename("landcover"),
             mod16.select("ET").mean().rename("ET"),
         ]).clip(region)
         data = retry(download, veg, region, 200)
         with rasterio.open(io.BytesIO(data)) as s_:
-            write_tif(veg_p, s_.read().astype("float64"), s_.profile.copy())
+            arr, prof = s_.read().astype("float64"), s_.profile.copy()
+        # EE's GeoTIFF carries no band names; the order is ee.Image.cat's
+        assert arr.shape[0] == 4, arr.shape
+        write_tif(veg_p, arr, prof)
+        with rasterio.open(veg_p, "r+") as d:
+            d.descriptions = ("landcover", "NDVI", "EVI", "ET")
         made.append("vegetation")
     return "+".join(made) if made else "ya estaba"
 
@@ -511,6 +571,16 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
                       if p.is_dir() and p.name[:4].isdigit())
         _make_event(out, edir.name, feature, days, margin_km, min_px)
         made += 1
+    # A curated source stays curated: its exclusion record travels with the
+    # ids, so `--phase curate` on the new tree is a no-op instead of taking
+    # another 15% of what is left (which is what happened on 2026-08-25).
+    src_ex = Path(src) / "excluded.json"
+    if src_ex.exists():
+        rec = json.loads(src_ex.read_text())
+        rec["inherited_from"] = str(src_ex)
+        (out / "excluded.json").write_text(json.dumps(rec, indent=1))
+        log(f"fase events: excluded.json heredado de {src} "
+            f"({len(rec.get('events', {}))} eventos ya excluidos)")
     log(f"fase events: {made} eventos recreados en {out} desde {src}")
     return {"events": made}
 
