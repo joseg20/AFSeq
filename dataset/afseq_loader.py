@@ -301,6 +301,29 @@ def get_features(id_dir, fire_date):
 
 
 # ----------------------------------------------------------------- dataset
+def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
+    """(top, left) of the patch: centred on the day-t fire, jittered.
+
+    Rasters are now bigger than the patch (window_of in build_afseq.py), so a
+    uniform crop would often hold no fire at all. The patch is centred on the
+    bounding box of the day-t active mask and shifted by a uniform jitter of
+    up to a quarter patch in each axis, clipped to the canvas; with no fire on
+    day t it falls back to a uniform crop. Consumes exactly two draws of the
+    `random` module after random.seed(idx), so samples stay reproducible. On
+    a raster that fits inside the patch in both axes it returns (0, 0), which
+    is what the old uniform crop returned too: unchanged samples there.
+    """
+    ys, xs = np.where(mask_t > 0.5)
+    if len(ys) == 0:
+        return random.randint(0, tH - ph), random.randint(0, tW - ph)
+    j = ph // 4
+    cy = (int(ys.min()) + int(ys.max())) // 2
+    cx = (int(xs.min()) + int(xs.max())) // 2
+    top = cy - ph // 2 + random.randint(-j, j)
+    left = cx - ph // 2 + random.randint(-j, j)
+    return (int(np.clip(top, 0, tH - ph)), int(np.clip(left, 0, tW - ph)))
+
+
 class Seq2SeqActivePadded(Dataset):
     def __init__(self, ids, DATASET, patch_size=64, max_seq_len=16,
                  horizon=8, require_fire_on_t=True):
@@ -352,7 +375,8 @@ class Seq2SeqActivePadded(Dataset):
         try:
             y0 = self._active(fid, future[0]); Ho, Wo = y0.shape
             tH = max(Ho, ph); tW = max(Wo, ph)
-            random.seed(idx); top = random.randint(0, tH - ph); left = random.randint(0, tW - ph)
+            random.seed(idx)
+            top, left = fire_centred_crop(self._active(fid, last_date), ph, tH, tW)
 
             def crop(arr):
                 if arr.shape[1] < tH or arr.shape[2] < tW:

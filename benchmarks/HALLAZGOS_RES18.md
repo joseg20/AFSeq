@@ -435,3 +435,23 @@ en disco sin uso; el build ya no los escribe. `curate` es idempotente
 (`excluded.json` como guardia). Tarball para mover: `$WSP_DATA/afseq_v6.tar.zst`
 (485 MB, md5 deff1204c6eb243cccdc56786ddd59f4).
 
+## 14. Ventana de 128 px y recorte centrado (25/08, decisión del director)
+
+Hallazgo que lo motiva: **el 91 % de los eventos (87 % de los días) es más
+pequeño que el patch de 64×64** (mediana 33×39 px); el loader rellenaba con
+ceros (mínimo de cada canal) y la forma del relleno revela la extensión final
+del fuego, porque el ráster era exactamente la cicatriz + 0,01°. WSTS no lo
+tiene (ventanas fijas). Decisión: ventana = bbox del contorno + 5 km por lado,
+mínimo 128×128 px a 200 m (`build_afseq.window_of`; `--phase events
+--from-tree` recrea los 1.194 ids con sus días reales), y recorte del patch
+centrado en el fuego del día t con jitter de ±16 px
+(`afseq_loader.fire_centred_crop`; idéntico al anterior cuando el ráster cabe
+en 64, cambia en el 17 % de eventos más grandes). `curate.fire_stats` usa el
+mismo recorte. Esqueleto verificado: 13.885 días, ventanas mediana 128×128,
+máx 279×386, ~238 M px-día → ~1,9 GB tif / ~16 GB HDF5 f32. Persistencia con
+el sampler nuevo sobre los rásteres viejos: 0,179 / 0,161 / 0,180 → 0,173 ±
+0,011 (ancla actualizada; se re-mide tras la descarga). La re-descarga
+(~1-2 h en paralelo contra EE) queda documentada en el README; con ella se
+re-entrenan exp2/exp3 y se recalculan suelo y curación. Tamaño esperado: WSTS+
+son 2.141 M px-día × 23 bandas; AFSeq pasa de 54 M a 238 M px-día.
+

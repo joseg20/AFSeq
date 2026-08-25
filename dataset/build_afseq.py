@@ -7,6 +7,8 @@ repairs that were applied as one-off scripts during August 2026 are folded in
 here, so this file -- not a sequence of patches -- is what defines the dataset.
 
     python build_afseq.py --out /path/new --phase events --contours fires.geojson
+    python build_afseq.py --out /path/new --phase events --from-tree /path/dataset_v6
+                                    # same 1,194 events, new window (bbox + 5 km, >= 128 px)
     python build_afseq.py --out /path/new --phase all
     python build_afseq.py --out /path/dataset_v6 --phase climate --workers 16
     python build_afseq.py --out /path/dataset_v6 --phase audit
@@ -407,7 +409,65 @@ def run_static(out: Path, workers: int, force: bool):
 
 
 # ------------------------------------------------------------------ events
-def run_events(out: Path, contours: Path, pad: float = 0.01):
+MARGIN_KM = 5.0        # around the final contour, every side
+MIN_PX = 128           # window never smaller than this, at SCALE_FIRE
+
+
+def window_of(geometry, margin_km: float = MARGIN_KM, min_px: int = MIN_PX,
+              scale_m: int = SCALE_FIRE) -> list:
+    """[west, south, east, north] of the event window, in degrees.
+
+    THE WINDOW IS NOT THE SCAR. Until 2026-08-25 each event's rasters covered
+    its final contour plus 0.01 deg, so the raster extent itself told a model
+    where the fire would end, and 91% of the events were smaller than the
+    64-px training patch, which the loader filled with zeros. Now: the
+    contour's bounding box, `margin_km` on every side, and never less than
+    `min_px` pixels of `scale_m` in either axis (128 px = 25.6 km, twice the
+    patch, the crop WSTS+ evaluates on), grown symmetrically about the box
+    centre. Rasters bigger than the patch make the random crop random.
+    """
+    c = geometry["coordinates"]
+    pts = []
+    stack = [c]
+    while stack:
+        x = stack.pop()
+        if isinstance(x[0], (int, float)):
+            pts.append((float(x[0]), float(x[1])))
+        else:
+            stack.extend(x)
+    lons, lats = zip(*pts)
+    w, e, s, n = min(lons), max(lons), min(lats), max(lats)
+    lat0 = (s + n) / 2.0
+    km_lat = 110.54
+    km_lon = 111.32 * math.cos(math.radians(lat0))
+    w, e = w - margin_km / km_lon, e + margin_km / km_lon
+    s, n = s - margin_km / km_lat, n + margin_km / km_lat
+    min_km = min_px * scale_m / 1000.0
+    if (e - w) * km_lon < min_km:
+        cx = (w + e) / 2.0
+        w, e = cx - min_km / km_lon / 2, cx + min_km / km_lon / 2
+    if (n - s) * km_lat < min_km:
+        cy = (s + n) / 2.0
+        s, n = cy - min_km / km_lat / 2, cy + min_km / km_lat / 2
+    return [w, s, e, n]
+
+
+def _make_event(out: Path, fid: str, feature: dict, days: list,
+                margin_km: float, min_px: int) -> None:
+    edir = out / fid
+    edir.mkdir(parents=True, exist_ok=True)
+    (edir / "contour.geojson").write_text(json.dumps(feature))
+    props = dict(feature.get("properties", {}))
+    props["window"] = window_of(feature["geometry"], margin_km, min_px)
+    props["window_rule"] = f"bbox + {margin_km} km, min {min_px} px @ {SCALE_FIRE} m"
+    (edir / "info.geojson").write_text(json.dumps(
+        {"id": fid, "geometry": feature["geometry"], "properties": props}))
+    for day in days:
+        (edir / day).mkdir(exist_ok=True)
+
+
+def run_events(out: Path, contours: Path, margin_km: float = MARGIN_KM,
+               min_px: int = MIN_PX):
     """Create the event skeleton from a GeoJSON of fire contours.
 
     Each feature needs an id, a geometry, and start_date / end_date in its
@@ -415,7 +475,7 @@ def run_events(out: Path, contours: Path, pad: float = 0.01):
     census produce. THAT selection (which fires are in the dataset, after the
     cropland, duration and clustering filters) is a research decision and stays
     upstream: this phase turns an agreed list into directories, it does not
-    decide the list.
+    decide the list. The raster window of each event is `window_of`.
     """
     gj = json.loads(contours.read_text())
     feats = gj["features"] if "features" in gj else gj
@@ -424,21 +484,34 @@ def run_events(out: Path, contours: Path, pad: float = 0.01):
         fid = str(f.get("id") or f["properties"].get("id"))
         if not fid.startswith("id_"):
             fid = f"id_{int(fid):04d}"
-        edir = out / fid
-        edir.mkdir(parents=True, exist_ok=True)
-        (edir / "contour.geojson").write_text(json.dumps(f))
-        (edir / "info.geojson").write_text(json.dumps(
-            {"id": fid, "geometry": f["geometry"],
-             "properties": f.get("properties", {})}))
         props = f.get("properties", {})
         d0 = datetime.strptime(props["start_date"], "%Y-%m-%d")
         d1 = datetime.strptime(props["end_date"], "%Y-%m-%d")
-        day = d0
+        days, day = [], d0
         while day <= d1:
-            (edir / day.strftime("%Y-%m-%d")).mkdir(exist_ok=True)
-            day += timedelta(days=1)
+            days.append(day.strftime("%Y-%m-%d")); day += timedelta(days=1)
+        _make_event(out, fid, f, days, margin_km, min_px)
         made += 1
     log(f"fase events: {made} eventos creados en {out}")
+    return {"events": made}
+
+
+def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
+                         min_px: int = MIN_PX):
+    """Same skeleton, but from an existing tree: its ids, contours and the
+    days it actually has (not start/end: holes stay holes). This is how the
+    1,194 events of dataset_v6 are re-downloaded with the new window."""
+    made = 0
+    for edir in sorted(p for p in Path(src).iterdir()
+                       if p.is_dir() and p.name.startswith("id_")):
+        feature = json.loads((edir / "contour.geojson").read_text())
+        if "features" in feature:                 # a one-feature collection
+            feature = feature["features"][0]
+        days = sorted(p.name for p in edir.iterdir()
+                      if p.is_dir() and p.name[:4].isdigit())
+        _make_event(out, edir.name, feature, days, margin_km, min_px)
+        made += 1
+    log(f"fase events: {made} eventos recreados en {out} desde {src}")
     return {"events": made}
 
 # --------------------------------------------------------------------- driver
@@ -456,7 +529,10 @@ def region_of(event_dir: Path):
     info = event_dir / "info.geojson"
     if info.exists():
         g = json.loads(info.read_text())
-        geom = g.get("geometry", g)
+        win = g.get("properties", {}).get("window")
+        if win:                                   # written by window_of
+            return ee.Geometry.Rectangle(win), None
+        geom = g.get("geometry", g)               # legacy trees: the contour
         return ee.Geometry(geom).bounds(), None
     raise NoData("sin geometria")
 
@@ -626,15 +702,20 @@ def main():
                     help="curate: fraccion de eventos mas persistentes a excluir "
                          "por region (por defecto US=0.15, ver dataset/curate.py)")
     ap.add_argument("--contours", type=Path,
-                    help="GeoJSON de contornos, obligatorio para --phase events")
+                    help="GeoJSON de contornos para --phase events")
+    ap.add_argument("--from-tree", type=Path,
+                    help="events: recrear los eventos (ids, contornos, dias) de "
+                         "un arbol existente con la ventana nueva")
+    ap.add_argument("--margin-km", type=float, default=MARGIN_KM)
+    ap.add_argument("--min-px", type=int, default=MIN_PX)
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--force", action="store_true",
                     help="rebuild even rasters that look healthy")
     args = ap.parse_args()
 
-    if args.phase == "events" and not args.contours:
-        raise SystemExit("--phase events necesita --contours <geojson>")
+    if args.phase == "events" and not (args.contours or args.from_tree):
+        raise SystemExit("--phase events necesita --contours <geojson> o --from-tree <arbol>")
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "curate":
         return run_curate(args)
@@ -645,7 +726,10 @@ def main():
         audit(args.out)
         return 0
     if args.phase == "events":
-        run_events(args.out, args.contours)
+        if args.from_tree:
+            run_events_from_tree(args.out, args.from_tree, args.margin_km, args.min_px)
+        else:
+            run_events(args.out, args.contours, args.margin_km, args.min_px)
         return 0
     phases = (["static", "fire", "climate", "reflect"] if args.phase == "all"
               else [args.phase])

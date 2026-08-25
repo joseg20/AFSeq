@@ -23,7 +23,8 @@ what is left. Two rules, both decided on 2026-08-25 with the numbers below:
    the same floor (0.168 / 0.173 / 0.156) and the dataset at 0.167, the level
    of WSTS+ under the same sampler (0.200). Chile and S.Europe are untouched.
    Persistence is ranked by the Jaccard of consecutive daily masks counted in
-   random 64-px crops, four per day, the way the loader scores it; the count
+   64-px crops centred on the day-t fire with jitter, four per day, the way
+   the loader samples; the count
    is deterministic (days sorted, one RNG per event seeded by its id).
 
 Nothing is deleted: excluded events move to `<tree>_excluded/<reason>/<id>`,
@@ -120,9 +121,13 @@ def fire_stats(tree: Path, fids=None, patch: int = 64, crops: int = 4) -> dict:
             th, tw = max(m.shape[0], patch), max(m.shape[1], patch)
             mp = np.zeros((th, tw), bool); mp[:m.shape[0], :m.shape[1]] = m
             yp = np.zeros((th, tw), bool); yp[:y.shape[0], :y.shape[1]] = y
+            ys, xs = np.where(mp)      # crops centred on the day-t fire, as the loader
+            cy = (int(ys.min()) + int(ys.max())) // 2
+            cx = (int(xs.min()) + int(xs.max())) // 2
+            j = patch // 4
             for _ in range(crops):
-                t = rng.integers(0, th - patch + 1)
-                l = rng.integers(0, tw - patch + 1)
+                t = int(np.clip(cy - patch // 2 + rng.integers(-j, j + 1), 0, th - patch))
+                l = int(np.clip(cx - patch // 2 + rng.integers(-j, j + 1), 0, tw - patch))
                 mc, yc = mp[t:t + patch, l:l + patch], yp[t:t + patch, l:l + patch]
                 TP += int((mc & yc).sum()); FP += int((mc & ~yc).sum())
                 FN += int((~mc & yc).sum()); P += int(yc.sum()); N += yc.size
