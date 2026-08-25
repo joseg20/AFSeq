@@ -9,8 +9,8 @@ Default layout the code expects next to the repository:
 
     <parent>/
       release_paper/           this repository
-      data/dataset_v6/         AFSeq: covariates AND daily active masks (AFSEQ_DATA)
-      data/dataset_v6_cache/   decoded copy, optional  (AFSEQ_CACHE)
+      data/dataset_v7/         AFSeq: covariates AND daily active masks (AFSEQ_DATA)
+      data/dataset_v7_cache/   decoded copy, optional  (AFSEQ_CACHE)
       data/wstsplus/hdf5/      WSTS+ HDF5, exp1/4/5    (WSTS_HDF5)
       runs/                    training outputs         (RUNS_DIR)
 
@@ -29,7 +29,7 @@ def _p(var, default):
 
 # --- data -----------------------------------------------------------------
 DATA = _p("WSP_DATA", ROOT.parent / "data")
-AFSEQ = _p("AFSEQ_DATA", DATA / "dataset_v6")
+AFSEQ = _p("AFSEQ_DATA", DATA / "dataset_v7")
 # Decoded copy of AFSEQ (dataset/afseq_cache.py). Only used when the
 # environment variable is SET: the default is where --build writes it.
 AFSEQ_CACHE = _p("AFSEQ_CACHE", str(AFSEQ) + "_cache")
@@ -37,7 +37,7 @@ WSTS_HDF5 = _p("WSTS_HDF5", DATA / "wstsplus" / "hdf5")
 
 # --- splits and dataset constants shipped WITH the code ---------------------
 SPLITS_DIR = _p("AFSEQ_SPLITS_DIR", ROOT / "dataset" / "splits")
-AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_v6_s23.txt")
+AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_v7_s23.txt")
 # per-channel TRAIN means used to impute holes (dataset/afseq_loader.py)
 CHANNEL_MEANS = _p("AFSEQ_CHANNEL_MEANS", ROOT / "dataset" / "channel_means_v5.json")
 

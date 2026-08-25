@@ -109,7 +109,7 @@ def matrix(out: Path, seeds, ks=KS, modes=MODES) -> list[Job]:
                             log=out / "logs" / f"{tag}.log", cwd=ROOT,
                             output=out / f"{tag}.json",
                             env={"AFSEQ_SPLITS":
-                                 str(SPLIT_DIR / f"splits_v6_s{seed}.txt")}))
+                                 str(SPLIT_DIR / f"splits_v7_s{seed}.txt")}))
     return jobs
 
 

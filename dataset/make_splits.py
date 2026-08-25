@@ -2,7 +2,7 @@
 """The AFSeq splits: three seeds, stratified by region, fires as the unit.
 
     python dataset/make_splits.py --seeds 5 7 23
-    -> dataset/splits/splits_v6_s{seed}.txt          (what ships with the repo)
+    -> dataset/splits/splits_v7_s{seed}.txt          (what ships with the repo)
 
 Splits whatever the dataset tree contains. What is NOT in the tree is decided
 upstream by `build_afseq.py --phase curate` (dataset/curate.py): duplicated
@@ -145,8 +145,8 @@ def main():
     ap.add_argument("--tol", type=float, default=0.15,
                     help="desvio relativo permitido por region y magnitud al fijar")
     ap.add_argument("--also-val", action="store_true")
-    ap.add_argument("--tag", default="v6")
-    ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats_v6.json",
+    ap.add_argument("--tag", default="v7")
+    ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats_v7.json",
                     help="cache de las estadisticas por evento (se recalcula si falta)")
     ap.add_argument("--no-write", action="store_true", help="solo estimar")
     a = ap.parse_args()

@@ -200,7 +200,7 @@ def main():
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--check", type=int, metavar="N",
                     help="comparar N muestras por seccion, raw vs cache")
-    ap.add_argument("--splits", default=str(SPLITS_DIR / "splits_v6_s7.txt"))
+    ap.add_argument("--splits", default=str(SPLITS_DIR / "splits_v7_s7.txt"))
     ap.add_argument("--cache", type=Path, default=AFSEQ_CACHE)
     a = ap.parse_args()
     if a.build:

@@ -99,7 +99,7 @@ def tag_of(model: str, seed: int) -> str:
     return tag + "_padfix"
 
 
-def matrix(out: Path, splits: str = "v6") -> list[Job]:
+def matrix(out: Path, splits: str = "v7") -> list[Job]:
     jobs = []
     for model in OURS:
         for seed in SPLITS:
@@ -218,7 +218,7 @@ def load_model(name, runs, seed, dev):
     return m.to(dev).eval()
 
 
-def table(runs: Path, seeds, rows=ROWS, workers=4, batch_size=4, splits="v6"):
+def table(runs: Path, seeds, rows=ROWS, workers=4, batch_size=4, splits="v7"):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     loaders = {s: afseq_loader(str(SPLIT_DIR / f"splits_{splits}_s{s}.txt"),
                                batch_size=batch_size, workers=workers)
@@ -271,9 +271,9 @@ def main():
                          "cambia la AP de un modelo con el relleno")
     ap.add_argument("--out", type=Path, default=RUNS / "tabla2")
     ap.add_argument("--json", type=Path, default=None)
-    ap.add_argument("--splits", default="v6",
+    ap.add_argument("--splits", default="v7",
                     help="que splits_<tag>_s<seed>.txt entrenar/puntuar, buscado en "
-                         "AFSEQ_SPLITS_DIR (dataset/splits: solo v6, el dataset "
+                         "AFSEQ_SPLITS_DIR (dataset/splits: solo v7, el dataset "
                          "final). Con otro tag usa tambien otro --out")
     a = ap.parse_args()
 
