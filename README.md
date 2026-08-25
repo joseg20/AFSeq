@@ -63,7 +63,7 @@ daily active-fire masks in one tree) reproduce exp2 and exp3. exp1, exp4 and exp
 the WSTS+ HDF5 (92 GB) and, for exp4's UTAE-AR/WSTS+ cell, the four
 best_AR_Veg_p4f{0-3} checkpoints (82 MB).
 
-## Rebuilding AFSeq with the 128-px window (pending campaign)
+## AFSeq v7: the 128-px window (the dataset the paper uses)
 
 Until 2026-08-25 every event's rasters covered its final contour plus 0.01
 deg: 91% of the events were smaller than the 64-px training patch (the loader
@@ -71,9 +71,12 @@ padded them with zeros) and the raster extent itself told a model where the
 fire would end. `build_afseq.window_of` now makes the window the contour's
 bounding box plus 5 km on every side, never smaller than 128 x 128 px at
 200 m (25.6 km, twice the patch), and the loader crops the patch around the
-day-t fire with jitter (`afseq_loader.fire_centred_crop`). The same 1,194
-events, re-downloaded (about 1-2 h against Earth Engine with the three daily
-phases in parallel; the build is resumable):
+day-t fire with jitter (`afseq_loader.fire_centred_crop`). Built on 2026-08-25 from the 1,301 contours in about 1 h 05 against Earth
+Engine with 34 threads (the build is resumable); curation on the new windows
+keeps 1,194 events (33 duplicates and the 15% most persistent US events out;
+64 of those 74 coincide with the list computed on the old windows). 13,927
+daily observations, 12,732 training days, 16 GB of GeoTIFF (the 30 m DEM is
+13 GB of it), 20 GB decoded cache. Persistence 0.156 +- 0.011. To rebuild:
 
     source env/<machine>.sh
     python dataset/build_afseq.py --out <new tree> --phase events --from-tree $AFSEQ_DATA
@@ -87,7 +90,5 @@ phases in parallel; the build is resumable):
     AFSEQ_DATA=<new tree> python dataset/make_splits.py --seeds 5 7 23
     AFSEQ_DATA=<new tree> python dataset/afseq_cache.py --build && ... --check 60
 
-Expected: ~238 M pixel-days, ~1.9 GB of GeoTIFF (16 GB as float32 HDF5).
-Every number of exp2 and exp3 is then retrained; the persistence floor and
-the curate selection are recomputed on the new windows.
+Every number of exp2 and exp3 is trained on this tree.
 

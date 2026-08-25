@@ -455,3 +455,32 @@ el sampler nuevo sobre los rásteres viejos: 0,179 / 0,161 / 0,180 → 0,173 ±
 re-entrenan exp2/exp3 y se recalculan suelo y curación. Tamaño esperado: WSTS+
 son 2.141 M px-día × 23 bandas; AFSeq pasa de 54 M a 238 M px-día.
 
+## 15. dataset_v7 cerrado (25/08, 15:30)
+
+Campaña de 13.885 días en 1 h 05 (34 hilos: fire 12 + climate 11 + reflect 11;
+9-11 días/s). Cuatro defectos del build salieron porque v7 es el primer árbol
+construido de punta a punta por el release (v6 heredaba estáticas del pipeline
+viejo): DEM de 1 banda (→ 3: elevación, pendiente, aspecto, Horn en UTM);
+vegetación en orden `[NDVI,EVI,lc,ET]` y promediada sobre toda la colección
+(→ `[lc,NDVI,EVI,ET]`, mes previo al inicio, cobertura moda 2 años); malla de
+vegetación desplazada 1 px en el 60 % de eventos (→ sobre la malla del fuego,
+vecino más cercano; `fire` va antes que `static`); MCD12Q1 sin imagen para los
+76 eventos de 2026 (→ dos imágenes más recientes). Un quinto error mío: la
+cadena volvió a curar el árbol ya curado y quitó 63 más; restaurados, y
+`--from-tree` hereda ahora `excluded.json`.
+
+Curación **recalculada sobre las ventanas de 128** con los 1.301 (árbol
+temporal con solo la máscara de fuego para los 107 candidatos): mismos 33
+duplicados; 64 de los 74 de USA coinciden, 10 cambian en el borde del ranking
+(entran id_0404, 0855, 0935, 1018, 1027, 1049, 1081, 1112, 1614, 1628; salen
+id_0835, 0959, 1098, 1109, 1114, 1441, 1623, 1672, 1780, 1798). Decisión del
+director: adoptar la recalculada, para que v7 sea literalmente lo que produce
+`build_afseq.py --phase all`. Resultado: 1.194 eventos (Chile 453 / USA 422 /
+S.Europa 319), 13.927 días, 12.732 features (caché idéntica al loader crudo),
+audit limpio (reflectancia 3,1 % de huecos reales). Persistencia real (crop
+centrado): **0,168 / 0,145 / 0,156 → 0,156 ± 0,011**; estimada por región
+Chile 0,154 / S.Europa 0,138 / USA 0,179. Splits `dataset/splits/splits_v7_s*`
+(los v6 salen del repo; membresía distinta en 10 eventos). Defaults del repo y
+`env/lascar.sh` → v7. Pendiente: decisión sobre guardar el DEM a 200 m (13 GB
+de los 16) y el tar de descarga de v7.
+

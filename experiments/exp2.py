@@ -45,9 +45,10 @@ pooled padded steps into the LTAE's GroupNorm statistics. All are fixed, and
 come back silently.
 
 PERSISTENCE is computed here too, from the same loader and the same filter, so
-the floor of the table is measured rather than quoted: 0.167 +- 0.007 on the
-v6 splits (1,194 events; dataset/curate.py says which 33 duplicates and 74 US
-fires the build leaves out, and why). With every event of dataset_v6 it is 0.252, and the 0.198
+the floor of the table is measured rather than quoted: 0.156 +- 0.011 on the
+v7 splits (1,194 events; dataset/curate.py says which 33 duplicates and 74 US
+fires the build leaves out, and why). With every event on the old contour
+windows it was 0.252, and the 0.198
 of an earlier draft was a test set that no longer exists. What this prints is
 the one that belongs next to the model rows it prints, which is the only
 comparison the table actually makes.

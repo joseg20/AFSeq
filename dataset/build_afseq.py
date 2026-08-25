@@ -7,13 +7,13 @@ repairs that were applied as one-off scripts during August 2026 are folded in
 here, so this file -- not a sequence of patches -- is what defines the dataset.
 
     python build_afseq.py --out /path/new --phase events --contours fires.geojson
-    python build_afseq.py --out /path/new --phase events --from-tree /path/dataset_v6
+    python build_afseq.py --out /path/new --phase events --from-tree /path/old_tree
                                     # same 1,194 events, new window (bbox + 5 km, >= 128 px)
     python build_afseq.py --out /path/new --phase all
-    python build_afseq.py --out /path/dataset_v6 --phase climate --workers 16
-    python build_afseq.py --out /path/dataset_v6 --phase audit
-    python build_afseq.py --out /path/dataset_v6 --phase curate   # last step of "all"
-    python build_afseq.py --out /path/dataset_v6 --phase adopt-active --active <dir>
+    python build_afseq.py --out /path/tree --phase climate --workers 16
+    python build_afseq.py --out /path/tree --phase audit
+    python build_afseq.py --out /path/tree --phase curate   # last step of "all"
+    python build_afseq.py --out /path/tree --phase adopt-active --active <dir>
                                     # one-off: take masks from a separate tree
 
 Layout produced, per event and per day:
@@ -577,7 +577,7 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
                          min_px: int = MIN_PX):
     """Same skeleton, but from an existing tree: its ids, contours and the
     days it actually has (not start/end: holes stay holes). This is how the
-    1,194 events of dataset_v6 are re-downloaded with the new window."""
+    1,194 events of dataset_v6 were re-downloaded into dataset_v7."""
     made = 0
     for edir in sorted(p for p in Path(src).iterdir()
                        if p.is_dir() and p.name.startswith("id_")):

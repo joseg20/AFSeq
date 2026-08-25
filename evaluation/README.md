@@ -34,8 +34,8 @@ this instead.
 The rest of the measurement contract, so no experiment can drift from it:
 
 - the 128-px center crop of Table 3, versus whole-scene scoring
-- persistence baselines (AFSeq 0.167 on the v6 splits; 0.252 with all 1,301
-  events, duplicates and the 74 persistent US fires included; WSTS 0.193)
+- persistence baselines (AFSeq 0.156 on the v7 splits; 0.252 with all 1,301
+  events on the old contour windows; WSTS 0.193)
 - how folds are averaged, and why the two benchmarks are never pooled: WSTS
   contributes 91% of the pixels, so micro-pooling and macro-averaging give
   opposite answers about which model is better

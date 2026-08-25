@@ -16,7 +16,7 @@ of the same region until the test's estimated persistence AP sits in the
 window, keeping every region's share of fires, sampled days and burned pixels
 within `--tol`. It exists for benchmark studies (what if the test floor were
 X?) and is not what produced the shipped splits. Persistence of the shipped
-splits, measured with exp2.py --table --rows persistence: 0.167 +- 0.007.
+splits, measured with exp2.py --table --rows persistence: 0.156 +- 0.011 (dataset_v7).
 """
 from __future__ import annotations
 
