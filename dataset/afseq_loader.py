@@ -360,6 +360,14 @@ class Seq2SeqActivePadded(Dataset):
                     continue
                 start = max(0, idx - (max_seq_len - 1))
                 self.samples.append((fid, dates[start: idx + 1], date, future))
+        if not self.samples:
+            # Silent emptiness is how a wrong AFSEQ_DATA turns into a model that
+            # "trains" on nothing. Say what was looked for and where.
+            raise RuntimeError(
+                f"Seq2SeqActivePadded: 0 muestras. {len(ids)} ids pedidos, "
+                f"DATASET={self.DATASET}; cada dia necesita "
+                "<id>/<fecha>/active-fire.tif (build_afseq.py --phase fire, o "
+                "--phase adopt-active para un arbol de mascaras antiguo).")
 
     def __len__(self):
         return len(self.samples)
