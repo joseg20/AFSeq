@@ -586,6 +586,16 @@ __all__ = ["UTAE_AR"]
 
 FIRE_CHANNEL = 16  # channel index of the active-fire mask inside the 17-channel frame
 
+# U-Net widths per depth. 3 is the released model. 4 is the U-TAE exactly as
+# WildfireSpreadTS configures it (UTAELightning.py; Garnot's own defaults) and
+# exists for the depth ablation: UTAEBackbone already matches their remaining
+# hyper-parameters (n_head=16, d_model=256, d_k=4, strided conv 4/2/1, reflect
+# padding, group norm in the encoder), so depth is the only thing this varies.
+WIDTHS = {
+    3: ((64, 64, 128), (32, 64, 128)),
+    4: ((64, 64, 64, 128), (32, 32, 64, 128)),
+}
+
 
 class UTAE_AR(nn.Module):
     """UTAE-AR, the model reported in the paper (registered as ``AR_SS0`` in the
@@ -593,7 +603,11 @@ class UTAE_AR(nn.Module):
 
     Args:
         input_dim: channels per daily frame (16 covariates + 1 fire mask).
+        levels: U-Net depth, a key of ``WIDTHS``.  3 is the released model;
+            4 is the original WildfireSpreadTS configuration (see ``WIDTHS``).
+            Ignored when ``encoder_widths`` is passed explicitly.
         encoder_widths: channel width per U-Net level, shallow -> deep.
+            ``None`` (the default) takes them from ``WIDTHS[levels]``.
         decoder_widths: same, for the decoder; the last entry must match
             ``encoder_widths[-1]`` (the bottleneck is shared).
         out_conv: widths of the logit head after the decoder.
@@ -609,13 +623,18 @@ class UTAE_AR(nn.Module):
     def __init__(
         self,
         input_dim: int = 17,
-        encoder_widths: Sequence[int] = (64, 64, 128),
-        decoder_widths: Sequence[int] = (32, 64, 128),
+        encoder_widths: Sequence[int] | None = None,
+        decoder_widths: Sequence[int] | None = None,
         out_conv: Sequence[int] = (32, 1),
         horizon: int = 5,
         pad_value: float = 0.0,
+        levels: int = 3,
     ) -> None:
         super().__init__()
+        if (encoder_widths is None) != (decoder_widths is None):
+            raise ValueError("pass encoder_widths and decoder_widths together, or neither")
+        if encoder_widths is None:
+            encoder_widths, decoder_widths = WIDTHS[levels]
         encoder_widths = list(encoder_widths)
         decoder_widths = list(decoder_widths)
         self.horizon = horizon

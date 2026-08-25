@@ -74,7 +74,7 @@ from evaluation.metrics import pooled_ap_gpu                   # noqa: E402
 from train import (SINGLE_STEP, build_model, forward,          # noqa: E402
                    last_real_frame, to_logits)
 
-OURS = ("unet", "convnext", "convlstm", "utae", "utae_ar")
+OURS = ("unet", "convnext", "convlstm", "utae", "utae_ar", "utae_ar4")
 THEIRS = ("utae_res18",)
 SPLITS = (5, 7, 23)
 SPLIT_DIR = SPLITS_DIR                 # dataset/splits, shipped with the code
@@ -85,9 +85,9 @@ SEED_DEFAULT = 23          # paths.SEED: train.py omits it from the tag
 FIRE_CHANNEL = 16          # AFSeq's active-fire mask
 
 ROWS = ("persistence", "unet", "convnext", "convlstm", "utae",
-        "utae_res18", "utae_ar")
-SEQ_IN = {"convlstm", "utae", "utae_res18", "utae_ar"}
-SEQ_OUT = {"utae_ar"}
+        "utae_res18", "utae_ar", "utae_ar4")
+SEQ_IN = {"convlstm", "utae", "utae_res18", "utae_ar", "utae_ar4"}
+SEQ_OUT = {"utae_ar", "utae_ar4"}
 
 
 # ------------------------------------------------------------------ launching

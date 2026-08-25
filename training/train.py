@@ -76,7 +76,7 @@ from evaluation.metrics import pooled_ap_gpu                     # noqa: E402
 SINGLE_STEP = {"unet", "convnext", "convlstm", "utae"}
 STATIC = {"unet", "convnext"}            # consume one frame, not a sequence
 INTERNAL_SIGMOID = {"unet", "convnext"}  # these already output probabilities
-ALL_MODELS = SINGLE_STEP | {"utae_ar"}
+ALL_MODELS = SINGLE_STEP | {"utae_ar", "utae_ar4"}
 LOSSES = ("focal", "bce_dice", "bce", "dice", "jaccard")
 
 
@@ -101,6 +101,11 @@ def build_model(name: str, horizon: int, in_ch: int = 17):
     if name == "utae_ar":
         from utae_ar import UTAE_AR
         return UTAE_AR(horizon=horizon, input_dim=in_ch)
+    if name == "utae_ar4":
+        # Depth ablation: same UTAE-AR, U-Net widths of the original
+        # WildfireSpreadTS U-TAE (4 levels). See WIDTHS in models/utae_ar.py.
+        from utae_ar import UTAE_AR
+        return UTAE_AR(horizon=horizon, input_dim=in_ch, levels=4)
     raise SystemExit(f"modelo desconocido: {name}")
 
 
