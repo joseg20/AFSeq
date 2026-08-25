@@ -481,6 +481,6 @@ audit limpio (reflectancia 3,1 % de huecos reales). Persistencia real (crop
 centrado): **0,168 / 0,145 / 0,156 → 0,156 ± 0,011**; estimada por región
 Chile 0,154 / S.Europa 0,138 / USA 0,179. Splits `dataset/splits/splits_v7_s*`
 (los v6 salen del repo; membresía distinta en 10 eventos). Defaults del repo y
-`env/lascar.sh` → v7. Pendiente: decisión sobre guardar el DEM a 200 m (13 GB
-de los 16) y el tar de descarga de v7.
+`env/lascar.sh` → v7. Decisión del director: el DEM se queda a 30 m (16 GB en disco). Tar de
+descarga: `$WSP_DATA/afseq_v7.tar.zst`.
 
