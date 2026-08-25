@@ -416,6 +416,14 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
         d_lc = (start - timedelta(days=730)).strftime("%Y-%m-%d")
         mod13 = ee.ImageCollection("MODIS/061/MOD13Q1").filterBounds(region).filterDate(d0, d1)
         mcd12 = ee.ImageCollection("MODIS/061/MCD12Q1").filterBounds(region).filterDate(d_lc, d1)
+        # MCD12Q1 is annual and its last image is dated 2024-01-01: for an
+        # event starting after 2026-01-31 the two-year window opens after it
+        # and matches nothing, and ee.Image.cat would silently drop the band
+        # (76 events of 2026 in dataset_v7). Same rule the expansion campaign
+        # used: fall back to the two most recent images (mode of the two).
+        if retry(lambda: mcd12.size().getInfo()) == 0:
+            mcd12 = (ee.ImageCollection("MODIS/061/MCD12Q1").filterBounds(region)
+                     .sort("system:time_start", False).limit(2))
         mod16 = ee.ImageCollection("MODIS/061/MOD16A2").filterBounds(region).filterDate(d0, d1)
         if retry(lambda: mod13.size().getInfo()) == 0:
             raise NoData("MOD13Q1 sin cobertura en los 30 dias previos")
