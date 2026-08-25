@@ -1,0 +1,37 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/Swin/swin_temporal_dumb.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_monotemporal_full_features_pad.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: test_AP
+parameters:
+  trainer.devices: 
+    value: [3]
+  data.data_fold_id:
+    values:
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+  data.features_to_keep:
+    value: [0, 1, 2, 3, 4, 38, 39]
+  data.n_leading_observations:
+    value: 5
+  data.remove_duplicate_features:
+    value: false
+  do_test:
+    value: true
+  trainer.max_steps:
+    value: 10000
+program: src/train.py

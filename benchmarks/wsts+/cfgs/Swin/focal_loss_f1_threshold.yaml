@@ -1,0 +1,40 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/Swin/swin.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_monotemporal_full_features_pad.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: val_avg_precision.max
+parameters:
+  trainer.devices: 
+    value: [2]
+  optimizer.lr:
+    value: 0.001
+  model.init_args.encoder_weights:
+    value: imagenet
+  model.init_args.loss_function:
+    value: Focal
+  model.init_args.f1_threshold:
+    values:
+      - 0.1
+      - 0.2
+      - 0.3
+      - 0.4
+      - 0.5
+  model.init_args.f1_zero_division:
+    value: 1
+  data.data_fold_id:
+    value: 2
+  trainer.max_epochs: 
+    value: 50
+  do_test:
+    value: False
+program: src/train.py

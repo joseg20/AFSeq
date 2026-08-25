@@ -1,0 +1,43 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/unet/res18_monotemporal.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_monotemporal_full_features.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: test_AP
+parameters:
+  trainer.devices: 
+    value: [0]
+  data.data_fold_id:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+  data.features_to_keep:
+    value: [0, 1, 2, 3, 4, 38, 39] # Vegetation + Active Fire
+  data.n_leading_observations:
+    value: 1
+  data.remove_duplicate_features:
+    value: true
+  do_test:
+    value: true
+  trainer.max_steps:
+    value: 10000
+program: src/train.py

@@ -1,0 +1,69 @@
+"""Every path and seed of the project, in one place.
+
+Nothing else in the release hardcodes a directory. Every path here is an
+environment variable with a default RELATIVE to the repository, so the code
+runs on another machine by setting variables (see env/lascar.sh for ours),
+never by editing a file.
+
+Default layout the code expects next to the repository:
+
+    <parent>/
+      release_paper/           this repository
+      data/dataset_v6/         AFSeq day rasters       (AFSEQ_DATA)
+      data/fires_active_v4/    AFSeq daily active masks (AFSEQ_ACTIVE)
+      data/dataset_v6_cache/   decoded copy, optional  (AFSEQ_CACHE)
+      data/wstsplus/hdf5/      WSTS+ HDF5, exp1/4/5    (WSTS_HDF5)
+      runs/                    training outputs         (RUNS_DIR)
+
+`WSP_DATA` moves the whole data/ directory at once; the individual variables
+override one entry each.
+"""
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+
+
+def _p(var, default):
+    return Path(os.environ.get(var, default))
+
+
+# --- data -----------------------------------------------------------------
+DATA = _p("WSP_DATA", ROOT.parent / "data")
+AFSEQ = _p("AFSEQ_DATA", DATA / "dataset_v6")
+AFSEQ_ACTIVE = _p("AFSEQ_ACTIVE", DATA / "fires_active_v4")
+# Decoded copy of AFSEQ (dataset/afseq_cache.py). Only used when the
+# environment variable is SET: the default is where --build writes it.
+AFSEQ_CACHE = _p("AFSEQ_CACHE", str(AFSEQ) + "_cache")
+WSTS_HDF5 = _p("WSTS_HDF5", DATA / "wstsplus" / "hdf5")
+
+# --- splits and dataset constants shipped WITH the code ---------------------
+SPLITS_DIR = _p("AFSEQ_SPLITS_DIR", ROOT / "dataset" / "splits")
+AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_v6_s23.txt")
+# per-channel TRAIN means used to impute holes (dataset/afseq_loader.py)
+CHANNEL_MEANS = _p("AFSEQ_CHANNEL_MEANS", ROOT / "dataset" / "channel_means_v5.json")
+
+# --- outputs --------------------------------------------------------------
+RUNS = _p("RUNS_DIR", ROOT.parent / "runs")
+RESULTS = _p("RESULTS_DIR", ROOT / "results")
+
+# --- earth engine ---------------------------------------------------------
+EE_PROJECT = os.environ.get("EE_PROJECT", "ee-joseguillen")
+
+# --- reproducibility ------------------------------------------------------
+SEED = int(os.environ.get("SEED", 23))
+
+# --- the numbers any rewrite has to reproduce -----------------------------
+# Acceptance tests, not documentation: if a refactor stops matching these, it
+# has a bug, however clean it looks.
+ANCHORS = {
+    "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,   # paper Table 3: 0.429
+    "utae_ar_afseq_t1": 0.432,                      # 3-seed mean
+    # 0.169 +- 0.004 (3 seeds): exp2.py --table --rows persistence on the v6
+    # splits (dataset/splits, 1,194 events: no duplicates, no 15% most
+    # persistent US fires), the protocol every Table 2 row is scored under. With all 1,301 events it is 0.252 +- 0.014. The 0.198
+    # the paper once quoted was measured on a splits file whose fires no
+    # longer all exist, so nothing in the release can reproduce it.
+    "persistence_afseq_t1": 0.169,
+    "persistence_wsts_t1": 0.193,
+}

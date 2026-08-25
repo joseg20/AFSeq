@@ -1,0 +1,43 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/UTAE/all_features_dumb_doy.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_monotemporal_full_features.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: test_AP
+parameters:
+  data.data_fold_id:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+  data.features_to_keep:
+    value: [0, 1, 2, 3, 4, 38, 39]
+  data.n_leading_observations:
+    value: 5
+  data.remove_duplicate_features:
+    value: false
+  data.return_doy:
+    value: false
+  do_test:
+    value: true
+  trainer.max_steps:
+    value: 10000
+program: src/train.py

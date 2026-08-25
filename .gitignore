@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+._*
+results/
+*.pth
+*.ckpt
+test_pr_curve_data.npz
+wandb/
+*.log
+.claude/

@@ -1,0 +1,20 @@
+
+seed_everything: 0
+optimizer: 
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 0.001 
+model:
+  class_path: SwinUnetLightning
+  init_args:
+    n_channels: 7
+    flatten_temporal_dimension: true
+    pos_class_weight: 236
+    loss_function: Focal
+    encoder_weights: imagenet
+    crop_before_eval: true
+
+do_train: false
+do_test: false
+do_predict: true
+ckpt_path: ./lightning_logs/wildfire_progression/mr0avf6e/checkpoints/epoch=49-step=6050.ckpt

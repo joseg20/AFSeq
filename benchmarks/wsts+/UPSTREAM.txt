@@ -1,0 +1,8 @@
+Vendored copy of https://github.com/slahrichi/WildfireSpreadTS.git
+commit ed221d491fe2142a4b2e93462c2c0b7a1c7c31ad (2025-11-27, "Update README.md")
+
+Committed here WITH the seven reversible patches of ../wsts+_compat.py applied
+(src/dataloader/FireSpreadDataset.py, src/models/BaseModel.py,
+src/models/SMPTempModel.py, src/models/__init__.py, src/train.py); every
+experiment needs them, and `python benchmarks/wsts+_compat.py --revert`
+restores the published bytes. Their LICENSE is kept alongside.

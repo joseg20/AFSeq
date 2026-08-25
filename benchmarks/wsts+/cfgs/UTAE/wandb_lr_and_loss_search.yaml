@@ -1,0 +1,44 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/UTAE/all_features.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_multitemporal_full_features.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: val_avg_precision.max
+parameters:
+  trainer.devices: 
+    value: [0]
+  data.return_doy:
+    value: True
+  optimizer.lr:
+    values:
+      - 0.1
+      - 0.01
+      - 0.001
+      - 0.0001
+      - 0.00001
+  model.init_args.encoder_weights:
+    values:
+      - none
+      - pastis
+  model.init_args.loss_function:
+    values:
+      - BCE
+      - Focal
+      - Dice
+      - Jaccard
+  data.data_fold_id:
+    value: 2
+  trainer.max_epochs: 
+    value: 50
+  do_test:
+    value: False
+program: src/train.py

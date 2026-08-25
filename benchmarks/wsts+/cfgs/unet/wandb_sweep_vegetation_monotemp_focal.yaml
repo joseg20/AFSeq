@@ -1,0 +1,50 @@
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -c
+  - cfgs/unet/res18_monotemporal.yaml
+  - --trainer
+  - cfgs/trainer_single_gpu.yaml
+  - --data
+  - cfgs/data_monotemporal_full_features.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: test_AP
+parameters:
+  trainer.devices:
+    value: [3]
+  model.init_args.alpha_focal:
+    values:
+    - 0.1
+    - 0.15
+    - 0.20
+    - 0.25
+  # Chosen to have each year as the test set once
+  data.data_fold_id:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+  data.features_to_keep:
+    value: [0, 1, 2, 3, 4, 38, 39] # VIIRS + NDVI + EVI2 + Fire
+  data.n_leading_observations:
+    value: 1
+  data.remove_duplicate_features:
+    value: True
+  trainer.max_steps: 
+    value: 10000
+  do_test:
+    value: True
+program: src/train.py
