@@ -143,7 +143,7 @@ def retry(fn, *a, **kw):
             time.sleep(min(60, 2 ** attempt) * (1 + random.random()))
 
 
-def download(img, region, scale, ref_path=None):
+def download(img, region, scale, ref_path=None, resampling=Resampling.bilinear):
     """GeoTIFF bytes for img, optionally reprojected onto ref_path's grid."""
     url = img.reproject(crs="EPSG:4326", scale=scale).getDownloadURL(
         {"scale": scale, "region": region, "format": "GEO_TIFF"})
@@ -161,7 +161,7 @@ def download(img, region, scale, ref_path=None):
             reproject(source=rasterio.band(s, b + 1), destination=out[b],
                       src_transform=s.transform, src_crs=s.crs,
                       dst_transform=transform, dst_crs=crs,
-                      resampling=Resampling.bilinear)
+                      resampling=resampling)
     prof.update(count=out.shape[0], dtype="float64")
     return out, prof
 
@@ -346,7 +346,7 @@ def utm_epsg(lon: float, lat: float) -> int:
     return 32600 + zone if lat >= 0 else 32700 + zone
 
 
-def fetch_static(region, event_dir: Path, force=False):
+def fetch_static(region, event_dir: Path, force=False, ref=None):
     """dem.tif and vegetation.tif, one pair per event (they never change).
 
     Both replicate the ORIGINAL feature scripts (features/dem.py and
@@ -425,9 +425,18 @@ def fetch_static(region, event_dir: Path, force=False):
             mod13.select("EVI").mean().rename("EVI"),
             mod16.select("ET").mean().rename("ET"),
         ]).clip(region)
-        data = retry(download, veg, region, 200)
-        with rasterio.open(io.BytesIO(data)) as s_:
-            arr, prof = s_.read().astype("float64"), s_.profile.copy()
+        if ref is not None:
+            # ON THE FIRE GRID. Downloaded on its own, EE hands vegetation a
+            # grid that is off by one row or column from the fire raster's
+            # for 60% of the events (float rounding of the region bounds),
+            # and get_features cannot stack them. Nearest neighbour: land
+            # cover is categorical, and nearest is what EE's own reprojection
+            # did for every layer of the earlier datasets.
+            arr, prof = retry(download, veg, region, 200, ref, Resampling.nearest)
+        else:
+            data = retry(download, veg, region, 200)
+            with rasterio.open(io.BytesIO(data)) as s_:
+                arr, prof = s_.read().astype("float64"), s_.profile.copy()
         # EE's GeoTIFF carries no band names; the order is ee.Image.cat's
         assert arr.shape[0] == 4, arr.shape
         write_tif(veg_p, arr, prof)
@@ -449,8 +458,8 @@ def run_static(out: Path, workers: int, force: bool):
     stats, lock = {}, threading.Lock()
 
     def one(edir):
-        region, _ = region_of(edir)
-        return fetch_static(region, edir, force)
+        region, ref = region_of(edir)      # ref: a day raster, the fire grid
+        return fetch_static(region, edir, force, ref)
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futs = {ex.submit(one, e): e for e in todo}
@@ -801,7 +810,8 @@ def main():
         else:
             run_events(args.out, args.contours, args.margin_km, args.min_px)
         return 0
-    phases = (["static", "fire", "climate", "reflect"] if args.phase == "all"
+    # fire first: its rasters define the grid every other layer is put on
+    phases = (["fire", "static", "climate", "reflect"] if args.phase == "all"
               else [args.phase])
     for ph in phases:
         if ph == "static":
