@@ -222,7 +222,7 @@ class AFSeqDataModule(pl.LightningDataModule):
         for name in ("Train", "Val", "Test"):
             if name in self._sets:
                 continue
-            ids = dl_ids(load_ids(name, splits))
+            ids = dl_ids(load_ids(name, splits), AFSEQ)
             inner = Seq2SeqActivePadded(
                 ids, str(AFSEQ), self.hparams.patch, self.hparams.max_history,
                 horizon=1,               # these models predict t+1 only

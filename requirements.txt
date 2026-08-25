@@ -19,6 +19,7 @@ umap-learn==0.5.12
 numba==0.67.0
 wandb==0.28.2
 psutil==7.2.2
+einops==0.8.2   # benchmarks/wsts+ (their models) imports it; utae_res18 rows need it
 tqdm==4.68.3
 pyyaml==6.0.3
 jsonargparse==4.51.0
