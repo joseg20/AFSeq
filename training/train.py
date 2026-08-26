@@ -65,6 +65,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+import os as _os
+_os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")   # NFS: see benchmarks/wstsplus_data.py
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "models"))
