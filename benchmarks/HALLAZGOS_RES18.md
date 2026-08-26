@@ -482,7 +482,7 @@ centrado): **0,168 / 0,145 / 0,156 → 0,156 ± 0,011**; estimada por región
 Chile 0,154 / S.Europa 0,138 / USA 0,179. Splits `dataset/splits/splits_v7_s*`
 (los v6 salen del repo; membresía distinta en 10 eventos). Defaults del repo y
 `env/lascar.sh` → v7. Decisión del director: el DEM se queda a 30 m (16 GB en disco). Tar de
-descarga: `$WSP_DATA/afseq_v7.tar.zst`.
+descarga definitivo: `ranokau:/workspace1-ranokau/users/josegui/data/afseq_v7.tar.zst` (21.60 GB, md5 1ab750ad635053d14fac8b4363b7489d).
 
 ## 16. Canales v7: cobertura one-hot y M11 (25/08, decisión del director: converger con WSTS)
 
