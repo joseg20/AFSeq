@@ -541,3 +541,15 @@ utae_ar, utae_ar4 y de la fusión Veg (7/7 huecos con dato) en verde. Los 0,37
 / 0,40 que el otro clúster obtuvo sobre el tar de la mañana (ventana 128,
 17 canales, parche 64) no son comparables con nada de esto.
 
+## 18. Decisiones del 26/08 (director)
+
+- **exp4 (fusión cross-benchmark) se descarta** del paper: era más de la mitad
+  del coste (~85 GPU-h) y la historia se sostiene con exp1 (UTAE-AR en WSTS+)
+  + exp2/exp3 (AFSeq). El código queda en el repo para quien quiera correrlo.
+- exp5 (UMAP) usa el **checkpoint publicado** de WSTS+ (`theirs_ckpt/fold*_testAP*.pth`)
+  como encoder, sin entrenar el Res18 nativo.
+- exp1 recortado a lo que se usa: Veg y All con historia fija (8 corridas) y
+  Veg variable como ablación (4).
+- Los experimentos con WSTS+ se corren en ranokau (prompt entregado al otro
+  agente); condición previa: que 2018-2021 del HDF5 resuelvan desde allí.
+
