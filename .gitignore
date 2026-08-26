@@ -9,3 +9,4 @@ test_pr_curve_data.npz
 wandb/
 *.log
 .claude/
+*.tar.zst

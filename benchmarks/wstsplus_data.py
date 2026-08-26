@@ -48,12 +48,14 @@ FEATURES  Veg / Multi / All, as index lists over the 40 processed channels.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import h5py
 import numpy as np
 import torch
+import torchvision.transforms.functional as TF
 
 HERE = Path(__file__).resolve().parent
 THEIRS = HERE / "wsts+"
@@ -194,19 +196,100 @@ def make_dataset(fold: int, part: str, data_dir: str, features: str = "All",
         def __len__(self):
             return len(self.samples)
 
+        # ------------------------------------------------------------------
+        # WINDOWED READ. The HDF5 datasets are contiguous, so the original
+        # path reads the FULL rasters of every day of the window (~80 MB a
+        # sample) to keep a 128-px crop (~15 MB). Choosing the crop BEFORE
+        # reading needs only the fire channel (1/23 of the bytes): their
+        # augment scores 10 candidate crops by fire content, and their eval
+        # crop is a deterministic center crop. Every preprocessing step
+        # downstream (flips/rotations with angle corrections, sin of degrees,
+        # standardization by per-channel constants, binary mask, one-hot) is
+        # per-pixel, so window-then-preprocess equals preprocess-then-window.
+        # The np.random draws replicate FireSpreadDataset.augment exactly, in
+        # the same order, so given the same seed state the produced samples
+        # are BIT-IDENTICAL to the full-read path (verified by
+        # test_windowed_equals_fullread.py). WSTS_FULLREAD=1 forces the
+        # original path; rasters not larger than the crop also fall back.
+        # ------------------------------------------------------------------
+        def _pick_window(self, raw, hh, ww):
+            """(top, left, hflip, vflip, rotate), or None to fall back."""
+            cs = self.crop_side_length
+            if hh <= cs or ww <= cs:
+                return None
+            if not self.is_train:
+                # TF.center_crop's rounding
+                return (int(round((hh - cs) / 2.0)),
+                        int(round((ww - cs) / 2.0)), False, False, 0)
+            af = torch.Tensor(raw[:, RAW_AF])                  # (M, h, w)
+            yb = (af[-1] > 0).long().float()
+            best, bt, bl = None, 0, 0
+            for _ in range(10):
+                top = np.random.randint(0, hh - cs)
+                left = np.random.randint(0, ww - cs)
+                score = (af[:, top:top + cs, left:left + cs].mean()
+                         + 1000 * yb[top:top + cs, left:left + cs].mean())
+                if best is None or score > best:
+                    best, bt, bl = score, top, left
+            hf = bool(np.random.random() > 0.5)
+            vf = bool(np.random.random() > 0.5)
+            rot = int(np.floor(np.random.random() * 4))
+            return bt, bl, hf, vf, rot
+
+        def _preprocess_window(self, x, hf, vf, rot):
+            """Their preprocess_and_augment, minus the crop (already applied),
+            on an (M, 23, cs, cs) window. Same ops, same order."""
+            x = torch.Tensor(x)
+            deg = self.indices_of_degree_features
+            if hf:
+                x = TF.hflip(x)
+                x[:, deg, ...] = 360 - x[:, deg, ...]
+            if vf:
+                x = TF.vflip(x)
+                x[:, deg, ...] = (180 - x[:, deg, ...]) % 360
+            if rot != 0:
+                x = TF.rotate(x, rot * 90)
+                x[:, deg, ...] = (x[:, deg, ...] - 90 * rot) % 360
+            x[:, deg, ...] = torch.sin(torch.deg2rad(x[:, deg, ...]))
+            binary_af_mask = (x[:, -1:, ...] > 0).float()
+            x = self.standardize_features(x)
+            x = torch.cat([x, binary_af_mask], axis=1)
+            x = torch.nan_to_num(x, nan=0.0)
+            new_shape = (x.shape[0], x.shape[2], x.shape[3],
+                         self.one_hot_matrix.shape[0])
+            landcover = self.one_hot_matrix[
+                x[:, 16, ...].long().flatten() - 1
+            ].reshape(new_shape).permute(0, 3, 1, 2)
+            return torch.concatenate(
+                [x[:, :16, ...], landcover, x[:, 17:, ...]], dim=1)
+
         def __getitem__(self, idx):
             year, fire, start, end = self.samples[idx]
             H = self.H
             path = self.imgs_per_fire[year][fire][0]
+            windowed = not os.environ.get("WSTS_FULLREAD")
             with h5py.File(path, "r") as f:
                 n = len(f["data"])
                 stop = min(end + 1 + H, n)
+                hh, ww = f["data"].shape[2], f["data"].shape[3]
+                # One sequential read of the window's days. An h5py hyperslab
+                # over the contiguous layout degenerates into ~30k scattered
+                # reads (measured at 7.8 s/sample), so the crop is applied in
+                # RAM instead: byte-identical, ~25x faster.
                 raw = f["data"][start:stop]                  # (M, 23, h, w)
+            win = self._pick_window(raw, hh, ww) if windowed else None
+            if win is not None:
+                top, left, hf, vf, rot = win
+                cs = self.crop_side_length
+                raw = raw[:, :, top:top + cs, left:left + cs]
             T = end - start + 1
             navail = raw.shape[0] - T                        # future days, >= 1
 
-            # theirs: standardise, one-hot, sin of degrees, binary fire mask
-            proc, _ = self.preprocess_and_augment(raw, raw[-1, RAW_AF])
+            if win is not None:
+                proc = self._preprocess_window(raw, hf, vf, rot)
+            else:
+                # theirs: standardise, one-hot, sin of degrees, binary mask
+                proc, _ = self.preprocess_and_augment(raw, raw[-1, RAW_AF])
             proc = proc.float()
             _, C, h, w = proc.shape
 

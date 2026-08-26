@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -75,7 +76,8 @@ def matrix(out: Path, histories=HISTORIES) -> list[Job]:
                          "--fold", str(fold), "--features", features,
                          "--history", history, "--loss", LOSS,
                          "--lr", str(LR), "--epochs", str(EPOCHS),
-                         "--workers", "4", "--out", str(out)],
+                         "--workers", os.environ.get("WSP_WORKERS", "4"),
+                         "--out", str(out)],
                     log=out / "logs" / f"{tag}.log",
                     cwd=ROOT,
                     output=out / f"{tag}.json"))
