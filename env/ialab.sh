@@ -1,8 +1,8 @@
 # Paths of THIS cluster (IALab / kraken). `source env/ialab.sh` before launching.
 # Everything lives in scratch: the home is 50 GB and for code only.
 export WSP_DATA=/home/josegui/scratch/afseq/data
-export AFSEQ_DATA=$WSP_DATA/dataset_v6
-export AFSEQ_CACHE=$WSP_DATA/dataset_v6_cache
+export AFSEQ_DATA=$WSP_DATA/dataset_v7
+export AFSEQ_CACHE=$WSP_DATA/dataset_v7_cache
 export WSTS_HDF5=/home/josegui/scratch/wstsplus/hdf5
 export RUNS_DIR=/home/josegui/scratch/afseq/runs
 export WSP_GPU=0 WSP_THREADS=2 WSP_MAX_GPU_PROCS=4
