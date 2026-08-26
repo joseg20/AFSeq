@@ -55,6 +55,14 @@ MAX_GPU_PROCS = int(os.environ.get("WSP_MAX_GPU_PROCS", 4))
 # decides at import time. We were asked twice to use fewer cores; a promise
 # that depends on every dependency behaving is not a promise.
 CPUS = os.environ.get("WSP_CPUS", "0-15")
+
+# Seconds a lane holds the launch lock after starting a job. Counting with
+# nvidia-smi is only a ceiling if the count can see the job it just started:
+# a training takes 30-60 s to touch the GPU, and two lanes waiting on the same
+# GPU used to see the same stale count and start together -- 3 processes on a
+# GPU capped at 2 (26/08, GPU 1 and GPU 3). Serialising count -> launch -> grace
+# closes that window.
+LAUNCH_GRACE = int(os.environ.get("WSP_LAUNCH_GRACE", 90))
 _THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                 "NUMEXPR_NUM_THREADS", "NUMBA_NUM_THREADS",
                 "VECLIB_MAXIMUM_THREADS")
@@ -143,6 +151,7 @@ def run_queue(jobs: list[Job], done_dir: Path, lanes: int = LANES,
         return
 
     lock = threading.Lock()
+    launch = threading.Lock()      # count -> launch -> grace, one lane at a time
     results: dict[str, int] = {}
 
     def lane(start: int):
@@ -156,20 +165,21 @@ def run_queue(jobs: list[Job], done_dir: Path, lanes: int = LANES,
                 env[var] = threads
             env.update(j.env)
             waited = False
-            while our_gpu_procs(gpu) >= MAX_GPU_PROCS:
-                if not waited:
-                    with lock:
-                        print(f"[{datetime.now():%H:%M:%S}] {j.name}: esperando, "
-                              f"ya hay {MAX_GPU_PROCS} procesos nuestros en la "
-                              f"GPU {gpu}", flush=True)
-                    waited = True
-                time.sleep(30)
-            with lock:
-                print(f"[{datetime.now():%H:%M:%S}] -> {j.name}", flush=True)
-            # append, not truncate: relaunching a queue used to overwrite the
-            # log of the previous attempt, so a half-finished run could show
-            # "Epoch 19/20" from a run that no longer existed
-            with open(j.log, "a") as fh:
+            with launch:
+                while our_gpu_procs(gpu) >= MAX_GPU_PROCS:
+                    if not waited:
+                        with lock:
+                            print(f"[{datetime.now():%H:%M:%S}] {j.name}: esperando, "
+                                  f"ya hay {MAX_GPU_PROCS} procesos nuestros en la "
+                                  f"GPU {gpu}", flush=True)
+                        waited = True
+                    time.sleep(30)
+                with lock:
+                    print(f"[{datetime.now():%H:%M:%S}] -> {j.name}", flush=True)
+                # append, not truncate: relaunching a queue used to overwrite the
+                # log of the previous attempt, so a half-finished run could show
+                # "Epoch 19/20" from a run that no longer existed
+                fh = open(j.log, "a")
                 fh.write("\n===== %s %s\n" % (
                     datetime.now().strftime("%F %H:%M:%S"), " ".join(j.cmd)))
                 # flush before handing the fd to the child: our write sits in
@@ -178,9 +188,12 @@ def run_queue(jobs: list[Job], done_dir: Path, lanes: int = LANES,
                 # output, or not at all. That is why relaunching a queue looked
                 # like it was truncating logs when it was not.
                 fh.flush()
-                rc = subprocess.call(_taskset(j.cmd), stdout=fh,
-                                     stderr=subprocess.STDOUT,
-                                     cwd=str(j.cwd) if j.cwd else None, env=env)
+                proc = subprocess.Popen(_taskset(j.cmd), stdout=fh,
+                                        stderr=subprocess.STDOUT,
+                                        cwd=str(j.cwd) if j.cwd else None, env=env)
+                time.sleep(LAUNCH_GRACE)   # until nvidia-smi can count it
+            rc = proc.wait()
+            fh.close()
             if rc == 0:
                 j.marker(done_dir).touch()
             with lock:
