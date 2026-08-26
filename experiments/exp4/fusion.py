@@ -71,7 +71,7 @@ def _afseq_stats():
 class _WSTSVeg(Dataset):
     """One part of a WSTS+ fold, sliced to Veg. Their loader does the reading."""
 
-    def __init__(self, fold: int, part: str, horizon=H_DEFAULT, crop=64,
+    def __init__(self, fold: int, part: str, horizon=H_DEFAULT, crop=128,
                  drop_dupes=True):
         from wstsplus_data import make_dataset
         self.base = make_dataset(fold, part, str(WSTS_HDF5), features="Veg",
@@ -99,7 +99,7 @@ class _WSTSVeg(Dataset):
 class _AFSeqVeg(Dataset):
     """One part of the AFSeq split, mapped into the Veg space."""
 
-    def __init__(self, part: str, horizon=H_DEFAULT, crop=64, max_seq=16,
+    def __init__(self, part: str, horizon=H_DEFAULT, crop=128, max_seq=16,
                  drop_refl=False):
         from dataset import afseq_loader
         from dataset.afseq_loader import Seq2SeqActivePadded
@@ -108,8 +108,9 @@ class _AFSeqVeg(Dataset):
         from afseq_datamodule import dl_ids, load_ids
 
         section = {"train": "Train", "val": "Val", "test": "Test"}[part]
-        ids = dl_ids(load_ids(section, str(AFSEQ_SPLITS)))
-        self.base = Seq2SeqActivePadded(ids, str(AFSEQ), crop, max_seq, horizon)
+        ids = dl_ids(load_ids(section, str(AFSEQ_SPLITS)), AFSEQ)
+        self.base = Seq2SeqActivePadded(ids, str(AFSEQ), crop, max_seq, horizon,
+                                        with_fire_hour=True)   # Veg slot 5
         self.mean, self.std = _afseq_stats()
         self.drop_refl = drop_refl
 
@@ -131,9 +132,14 @@ class _AFSeqVeg(Dataset):
             # fut_covars carry 16 channels (no fire); pad the fire slot so the
             # mapper sees the 17 it expects, then drop the fire slot again --
             # UTAE-AR supplies its own predicted mask there
-            pad = torch.zeros(FC.shape[:-3] + (1,) + FC.shape[-2:], dtype=FC.dtype)
+            # fut_covars carry N_CHANNELS - 1 channels (no fire); pad the fire
+            # and the detection-hour slots so the same mapping applies, then
+            # zero the hour slot: the WSTS+ side sets its hour to 0 on the
+            # forecast days too (no future fire leaks in)
+            pad = torch.zeros(FC.shape[:-3] + (2,) + FC.shape[-2:], dtype=FC.dtype)
             FCv = afseq_to_veg(torch.cat([FC, pad], dim=-3), self.mean,
                                self.std, self.drop_refl)[..., :N_VEG - 1, :, :]
+            FCv[..., N_VEG - 2, :, :] = 0.0
         else:
             FCv = FC
         return (Xv, FCv, torch.from_numpy(np.asarray(Y)).float(),

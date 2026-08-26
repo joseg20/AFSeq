@@ -484,3 +484,60 @@ Chile 0,154 / S.Europa 0,138 / USA 0,179. Splits `dataset/splits/splits_v7_s*`
 `env/lascar.sh` → v7. Decisión del director: el DEM se queda a 30 m (16 GB en disco). Tar de
 descarga: `$WSP_DATA/afseq_v7.tar.zst`.
 
+## 16. Canales v7: cobertura one-hot y M11 (25/08, decisión del director: converger con WSTS)
+
+Revisión producto a producto frente a WSTS/WSTS+ (tabla en la conversación
+del 25/08). Decisiones: **M11** (VNP09GA 1,6 µm, 1 km) se añade — era el
+único canal del Veg de WSTS+ que faltaba y exp4 lo rellenaba con una
+constante; **cobertura del suelo** pasa de un escalar ordinal `(clase−1)/16` a
+**17 canales one-hot** (IGBP 1..17, como WSTS); vegetación pre-fuego, ERA5 +
+CHIRPS (global; GRIDMET solo cubre CONUS), terreno y malla de 200 m se quedan
+como decisiones de diseño declaradas. Layout nuevo, definido una sola vez en
+`dataset/afseq_loader.CHANNELS` (34): 0-2 terreno · 3-19 cobertura one-hot ·
+20-22 NDVI/EVI/ET · 23-29 clima · 30-32 I1/I2/M11 · 33 fuego. Todo lo que
+necesita un índice o un conteo lo importa de ahí (`N_CHANNELS`, `FIRE_CHANNEL`,
+`CH[...]`, `LANDCOVER`). `dataset/channel_stats.py` regenera las medias de
+imputación (`channel_means_v7.json`) y las stats de exp4 sobre el Train de v7.
+La fase `reflect` baja ahora I1, I2, M11 (re-descargada sobre v7 el 25/08);
+un `reflectance.tif` de 2 bandas se lee con M11 = NaN → imputado. El "Veg"
+de AFSeq pasa de 5 a 6 canales (solo falta la hora de detección).
+
+## 17. Build de un solo comando, hora de detección y caché compacta (25/08, noche)
+
+- `build_afseq.py --phase all` hace ahora TODO tras `events`: fire → static →
+  climate → reflect → segunda pasada de reparación → audit → curate → splits →
+  caché (+ check de identidad) → estadísticas de canal. Cada paso sigue siendo
+  su propia `--phase`. Desaparece `adopt-active` (era la migración de una vez).
+- Ventana definitiva: bbox + 10 km, mínimo 256 px (51 km); parche 128 (25,6 km)
+  centrado en el fuego con jitter adaptativo (un fuego que cabe nunca queda
+  fuera). Motivo: con 128 de ventana el parche era la ventana entera.
+- DEM: calculado a 30 m en UTM (Horn) y guardado promediado en la malla del
+  fuego (200 m): 13 GB → ~0,2 GB sin cambiar lo que ve el modelo. Escalera
+  30→60→90 m para los eventos que superan los 50 MB de EE (3 de 1.301);
+  vegetación con escalera 200→250→500 m para "User memory limit exceeded".
+- `retry` ya no reintenta errores HTTP 4xx; `download` guarda el mensaje de EE.
+- Segunda banda de `active-fire.tif`: hora de detección UTC (0-23, 0 = sin
+  fuego, última pasada SNPP/NOAA-20). NO es canal del modelo (siguen 34); el
+  loader la añade solo con `with_fire_hour=True` (canal 35) y solo la usa la
+  fusión del exp4 para el hueco 5 del Veg → ya no queda ningún "fill".
+  Lección: una re-descarga de fire debe remuestrearse sobre la malla de las
+  capas existentes (EE redondea distinto y salía 1 px desplazada); ahora
+  `run_phase` pasa clima/reflectancia/estáticas como referencia.
+- Píxeles −inf en el borde de las máscaras (nodata de EE en GeoTIFF float,
+  0,04 %): `get_features` binariza el canal de fuego; `fetch_fire` hace
+  `unmask(0)`.
+- Caché: estáticos una vez por evento en uint16, dinámicos por día en uint16
+  (error ≤ 7,7e-6 sobre [0,1]; el fuego exacto), máscaras en uint8 con sus 2
+  bandas. ~4× menos que float32; vive en **ranokau** (`env/lascar.sh`) porque
+  lascar quedó sin sitio (topes de 200 GB por usuario en ambos).
+- Curación calculada sobre el árbol definitivo (1.301 → 1.194, parche 128).
+
+Números finales de dataset_v7 (25/08, 22:30): 1.194 eventos, 13.874 días,
+caché 29 GB (ranokau) idéntica al loader, stats de 35 canales (34 + hora),
+**persistencia con parche 128: 0.1196 / 0.1136 / 0.1387 → 0,124 ± 0,013**
+(WSTS+ con el mismo muestreo y su ventana entera: 0,200). Smokes en CPU de
+unet, convnext (salida al tamaño de entrada; tenía 64 clavado), convlstm, utae,
+utae_ar, utae_ar4 y de la fusión Veg (7/7 huecos con dato) en verde. Los 0,37
+/ 0,40 que el otro clúster obtuvo sobre el tar de la mañana (ventana 128,
+17 canales, parche 64) no son comparables con nada de esto.
+

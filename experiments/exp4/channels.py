@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The shared channel space the two benchmarks are fused in.
 
-WHY VEG. AFSeq has 17 channels, WSTS+ has 40, and they are not subsets of one
+WHY VEG. AFSeq has 34 channels, WSTS+ has 40, and they are not subsets of one
 another. To train ONE model on both, the two have to be expressed in the same
 space, and the space has to be one the published checkpoints already live in --
 otherwise the fused row cannot be compared with the WSTS+-only row of exp1.
@@ -13,13 +13,12 @@ WSTS+ needs no mapping: Veg IS a slice of its 40 processed channels, so its side
 is `x[:, [0,1,2,3,4,38,39]]` and nothing else happens to it. That is what keeps
 the fused experiment commensurable with exp1.
 
-AFSeq needs the table below. Five of the seven slots have a counterpart; two do
-not and are filled with 0, which is the WSTS training mean of that channel after
-z-scoring.
-
-DECLARED CONFOUND. Those two slots are constant for every AFSeq sample and real
-for every WSTS+ sample, so a model trained on the union can tell which benchmark
-a sample came from by looking at them. This is stated rather than hidden: the
+AFSeq needs the table below. Since 2026-08-25 all seven slots have a
+counterpart: M11 joined the reflectance, and the detection hour travels as
+band 2 of active-fire.tif and is appended by the loader when asked
+(Seq2SeqActivePadded(with_fire_hour=True)) as channel FIRE_HOUR_CHANNEL. No
+slot is filled with a constant any more; the "fill" kind stays for trees
+built before the hour existed. This is stated rather than hidden: the
 alternative (a smaller intersected space) would not be comparable with the
 published checkpoints, which is the whole point of fusing in Veg. When reading
 the fused rows, remember the model had that shortcut available.
@@ -28,10 +27,12 @@ from __future__ import annotations
 
 import torch
 
-# AFSeq's 17 channels, in order
-AF = dict(elevation=0, slope=1, aspect=2, landcover=3, ndvi=4, evi=5,
-          et=6, lst=7, dew=8, rh=9, wind_speed=10, wind_dir=11,
-          pressure=12, precipitation=13, refl_i1=14, refl_i2=15, fire=16)
+# AFSeq's channels, by name (dataset/afseq_loader.CHANNELS; 34 since M11
+# and the one-hot land cover joined on 2026-08-25)
+import sys
+from pathlib import Path as _P
+sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
+from dataset.afseq_loader import CH as AF, FIRE_HOUR_CHANNEL  # noqa: E402
 
 # WSTS+'s 40 processed channels
 WS = dict(m11=0, i2=1, i1=2, ndvi=3, evi2=4, fire_hour=38, fire=39)
@@ -45,18 +46,18 @@ FIRE_SLOT = 6                      # what UTAE-AR feeds back
 #   "raw"  copy through untouched (binary 0/1 on both sides)
 #   "fill" no counterpart; write 0 = the WSTS training mean of that channel
 VEG_FROM_AFSEQ = [
-    (None,          "fill", "VIIRS M11: AFSeq carries no 1.6 um band"),
+    (AF["refl_m11"], "z",   "VIIRS M11 <- AFSeq M11 (VNP09GA, same band)"),
     (AF["refl_i2"], "z",    "VIIRS I2 <- AFSeq reflectance I2 (VNP09GA, proxy)"),
     (AF["refl_i1"], "z",    "VIIRS I1 <- AFSeq reflectance I1 (VNP09GA, proxy)"),
     (AF["ndvi"],    "z",    "NDVI <- NDVI, MODIS on both sides (exact)"),
     (AF["evi"],     "z",    "EVI2 <- AFSeq EVI: related indices, same MODIS scale"),
-    (None,          "fill", "fire detection hour: AFSeq's mask is binary only"),
+    (FIRE_HOUR_CHANNEL, "z", "detection hour <- band 2 of active-fire.tif (UTC hour, 0 = none)"),
     (AF["fire"],    "raw",  "binary active fire <- binary active fire (exact)"),
 ]
 
 
 def afseq_to_veg(x: torch.Tensor, mean, std, drop_refl: bool = False):
-    """(..., 17, h, w) AFSeq -> (..., 7, h, w) in the Veg space.
+    """(..., 35, h, w) AFSeq (with the hour) -> (..., 7, h, w) in the Veg space.
 
     drop_refl blanks the two reflectance slots instead of mapping them. In the
     v1 release those AFSeq channels are ~76% zeros -- the VNP09GA v001 product

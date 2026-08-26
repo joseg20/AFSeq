@@ -5,7 +5,7 @@
     python dataset/afseq_cache.py --check 60         # cached == raw, bit for bit
     AFSEQ_CACHE=/path/to/cache python experiments/exp2.py --launch
 
-WHY. Profiled on a training sample of Seq2SeqActivePadded (patch 64, history
+WHY. Profiled on a training sample of Seq2SeqActivePadded (patch 64 then, history
 up to 16): 186 ms per sample, 89% of it inside load_raster -- 57 rasterio opens
 per sample, five .tif per day of history. The dataset is 843 MB and sits whole
 in the page cache, iowait is 0: the cost is decoding, not disk. With four
@@ -14,21 +14,23 @@ is why every AFSeq run here is CPU-bound while we are asked to use fewer cores.
 
 WHAT IT STORES. Exactly what the loader would have computed, once:
 
-    <cache>/<fid>/<date>.npy          get_features(...)[0]   float32 (17, H, W)
-    <cache>/<fid>/active/<date>.npy   load_raster(<fid>/<date>/active-fire.tif)[0][0]
+    <cache>/<fid>/static.npy          get_features(...)[0][:N_STATIC] as uint16, once per event
+    <cache>/<fid>/<date>.npy          get_features(...)[0][N_STATIC:] as uint16 (11, H, W)
+    <cache>/<fid>/active/<date>.npy   load_raster(<fid>/<date>/active-fire.tif)[0] as uint8 (bands, H, W)
     <cache>/<fid>/DONE                the fire was fully processed
 
 A day that get_features answers with None (no active-fire mask the next day, a
 missing static layer, an exception it swallows) is simply absent, and the
-cached call answers None too. The whole thing is 4.6 GB.
+cached call answers None too. Static channels (terrain, land cover, NDVI/EVI/ET: 23 of 34) are stored
+once per event; dataset_v7 comes to ~13 GB instead of 40.
 
 HOW IT PLUGS IN. `install(module)` replaces `get_features` and `load_raster`
 in the namespace of dataset/afseq_loader.py with lookups into the cache. Nothing
 else changes: same index, same crops, same padding, same random.seed(idx).
 The four places that import the loader call `install_if_configured` after the
 import, and it is a no-op unless AFSEQ_CACHE is set. `--check` proves the
-equivalence the only way that counts: np.array_equal on every tensor of the
-same samples, raw versus cached.
+equivalence the only way that counts: on the same samples, raw versus
+cached, masks equal and covariates within the uint16 quantum (7.7e-6).
 
 It refuses to install on a cache that is missing any fire of the dataset (no
 DONE marker): a half-built cache would otherwise turn missing days into the
@@ -60,21 +62,44 @@ def _build_fire(args) -> tuple[str, int, int]:
     fid, afseq, cache = args
     from dataset.afseq_loader import get_features, load_raster
 
+    from dataset.afseq_loader import N_STATIC
     iddir = afseq / fid
     out = cache / fid
     (out / "active").mkdir(parents=True, exist_ok=True)
     written = missing = 0
+    static = None
     for day in sorted(p.name for p in iddir.iterdir() if p.is_dir()):
-        X, _ = get_features(iddir, day)
-        if X is None:
-            missing += 1
-        else:
-            np.save(out / f"{day}.npy", X.astype(np.float32, copy=False))
-            written += 1
+        # the mask first: a day without features (the last of the event, no
+        # t+1) still has its mask, and the loader reads it as a target
         tif = iddir / day / "active-fire.tif"
         if tif.exists():
             m, _ = load_raster(tif)
-            np.save(out / "active" / f"{day}.npy", m[0])
+            # every band is a small integer: 0/1 (mask), 0-23 (detection
+            # hour); -inf edge pixels of older downloads become 0
+            np.save(out / "active" / f"{day}.npy",
+                    np.rint(np.nan_to_num(m, neginf=0.0, posinf=0.0)).clip(0, 255).astype(np.uint8))
+        X, _ = get_features(iddir, day)
+        if X is None:
+            missing += 1
+            continue
+        X = X.astype(np.float32, copy=False)
+        # the first N_STATIC channels (terrain, land cover, NDVI/EVI/ET) are
+        # the same array every day of the event: stored once as static.npy,
+        # and each day keeps only its dynamic channels. Halves nothing by
+        # approximation: install() concatenates the same bytes back.
+        if static is None:
+            static = X[:N_STATIC].copy()
+            assert static.min() >= 0.0 and static.max() <= 1.0, f"{fid}: static out of [0,1]"
+            np.save(out / "static.npy", np.rint(static * 65535.0).astype(np.uint16))
+        assert np.array_equal(X[:N_STATIC], static), f"{fid}/{day}: static changed"
+        # dynamic channels as uint16: every channel is min-max normalised
+        # into [0, 1] (the fire mask is 0/1), so 65535 levels give an error
+        # of at most 7.7e-6 -- and half the bytes of float32, which is what
+        # lets a 256-px-window cache fit next to the dataset.
+        dyn = X[N_STATIC:]
+        assert dyn.min() >= 0.0 and dyn.max() <= 1.0, f"{fid}/{day}: dynamic out of [0,1]"
+        np.save(out / f"{day}.npy", np.rint(dyn * 65535.0).astype(np.uint16))
+        written += 1
     (out / "DONE").touch()
     return fid, written, missing
 
@@ -119,18 +144,24 @@ def install(module, cache: Path = AFSEQ_CACHE, afseq: Path = AFSEQ):
             f"  python dataset/afseq_cache.py --build")
     cache = Path(cache)
 
+    _static = {}
+
     def get_features(id_dir, fire_date):
-        f = cache / Path(id_dir).name / f"{fire_date}.npy"
+        fid = Path(id_dir).name
+        f = cache / fid / f"{fire_date}.npy"
         if not f.exists():
             return None, None
-        return np.load(f), None
+        if fid not in _static:                    # one read per event
+            _static[fid] = np.load(cache / fid / "static.npy").astype(np.float32) / 65535.0
+        dyn = np.load(f).astype(np.float32) / 65535.0
+        return np.concatenate([_static[fid], dyn]), None
 
     def load_raster(path):
         path = Path(path)                        # <fid>/<date>/active-fire.tif
         f = cache / path.parent.parent.name / "active" / (path.parent.name + ".npy")
         if not f.exists():
             raise FileNotFoundError(f"{path} no esta en la cache ({f})")
-        return np.load(f)[None], None
+        return np.load(f).astype(np.float32), None         # (bands, H, W)
 
     module.get_features = get_features
     module.load_raster = load_raster
@@ -148,7 +179,7 @@ def install_if_configured(module) -> bool:
 
 
 # ------------------------------------------------------------------ checking
-def check(n: int, splits_file, horizon: int = 5, patch=64, max_history=16):
+def check(n: int, splits_file, horizon: int = 5, patch=128, max_history=16):
     """np.array_equal on every output of `n` random samples per section.
 
     One dataset object; the only thing that changes between the two passes is
@@ -156,6 +187,7 @@ def check(n: int, splits_file, horizon: int = 5, patch=64, max_history=16):
     """
     import random
     from dataset import afseq_loader as dap
+    from dataset.afseq_loader import FIRE_CHANNEL
     from dataset.afseq_loader import dl_ids, load_ids
 
     raw_fns = (dap.get_features, dap.load_raster)
@@ -180,7 +212,11 @@ def check(n: int, splits_file, horizon: int = 5, patch=64, max_history=16):
 
         bad = 0
         for i, x, y in zip(idxs, a, b):
-            same = (all(np.array_equal(u, v) for u, v in zip(x[:4], y[:4]))
+            # uint16 quantisation of the dynamic channels: |diff| <= 7.7e-6;
+            # masks (Y, and the fire channel) must still match exactly
+            same = (all(np.allclose(u, v, rtol=0, atol=1e-5) for u, v in zip(x[:2], y[:2]))
+                    and np.array_equal(x[0][:, FIRE_CHANNEL], y[0][:, FIRE_CHANNEL])
+                    and all(np.array_equal(u, v) for u, v in zip(x[2:4], y[2:4]))
                     and x[4] == y[4])
             if not same:
                 bad += 1

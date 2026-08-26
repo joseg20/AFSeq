@@ -20,7 +20,7 @@ __all__ = ["UNet"]
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=17, out_channels=1):
+    def __init__(self, in_channels=34, out_channels=1):
         super().__init__()
         def CBR(in_ch, out_ch):
             return nn.Sequential(

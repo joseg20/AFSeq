@@ -107,21 +107,18 @@ sys.path.insert(0, str(RELEASE))
 from paths import AFSEQ, AFSEQ_SPLITS  # noqa: E402
 
 
-# AFSeq's 17 channels, from utils.get_features:
-#   0,1,2    DEM        elevation, slope, aspect
-#   3,4,5,6  vegetation landcover, NDVI, EVI, ET
-#   7..13    climate    temp, dew, rh, wind speed, wind dir, pressure, precip
-#   14,15    reflectance
-#   16       active-fire mask of day t
+# AFSeq's channels: dataset/afseq_loader.CHANNELS (34 since 2026-08-25:
+# land cover one-hot in 3..19, M11 added, fire last)
+from dataset.afseq_loader import CH, CHANNELS, FIRE_CHANNEL, N_CHANNELS  # noqa: E402
 FEATURE_SETS = {
-    # closest analogue of their Veg -- see CHANGE 2: M11 and the detection hour
-    # have no AFSeq counterpart, so this is 5 channels where theirs is 7
-    "veg": [4, 5, 14, 15, 16],
+    # their Veg minus the detection hour, which AFSeq's binary mask lacks:
+    # 6 channels where theirs is 7
+    "veg": [CH["ndvi"], CH["evi"], CH["refl_i1"], CH["refl_i2"], CH["refl_m11"],
+            CH["fire"]],
     # the analogue of their "All"
-    "all": list(range(17)),
+    "all": list(range(N_CHANNELS)),
 }
-AFSEQ_N_CHANNELS = 17
-FIRE_CHANNEL = 16
+AFSEQ_N_CHANNELS = N_CHANNELS
 
 
 def _load_afseq_dataset():
@@ -194,7 +191,7 @@ class AFSeqDataModule(pl.LightningDataModule):
 
     def __init__(self, n_leading_observations: int | None = None,
                  feature_set: str = "all",
-                 batch_size: int = 64, num_workers: int = 4, patch: int = 64,
+                 batch_size: int = 64, num_workers: int = 4, patch: int = 128,
                  max_history: int = 16, splits_file: str | None = None):
         super().__init__()
         self.save_hyperparameters()

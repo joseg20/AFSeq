@@ -28,7 +28,7 @@ def make_cbr(in_ch, out_ch):
 
 
 class ConvNeXtUNet(nn.Module):
-    def __init__(self, backbone_name='convnext_small', in_chans=17, out_channels=1, pretrained=False):
+    def __init__(self, backbone_name='convnext_small', in_chans=34, out_channels=1, pretrained=False):
         super().__init__()
         self.backbone = timm.create_model(backbone_name, pretrained=pretrained, features_only=True, in_chans=in_chans)
         feat_channels = self.backbone.feature_info.channels()
@@ -55,6 +55,7 @@ class ConvNeXtUNet(nn.Module):
         self.final_conv = nn.Conv2d(prev_ch, out_channels, kernel_size=1)
 
     def forward(self, x):
+        in_size = x.shape[-2:]                 # output at the input's size, whatever the patch
         features = self.backbone(x)
         x = features[-1]
 
@@ -64,7 +65,7 @@ class ConvNeXtUNet(nn.Module):
             x = block(torch.cat([up, skip], dim=1))
 
         x = torch.sigmoid(self.final_conv(x))
-        x = F.interpolate(x, size=(64, 64), mode='bilinear', align_corners=False)
+        x = F.interpolate(x, size=in_size, mode='bilinear', align_corners=False)
 
         return x
 

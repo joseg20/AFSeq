@@ -11,10 +11,10 @@ the original was checked sample by sample (np.array_equal on every output) on
 Train/Val/Test of splits_v4_s7 the day of the port.
 
 THE SAMPLE. One item is (X_hist, fut_covars, Y, valid, meta):
-    X_hist      (T, 17, p, p)   the history up to day t, T <= max_seq_len;
-                                channels 0..15 are the covariates and 16 is
-                                the daily active-fire mask
-    fut_covars  (H-1, 16, p, p) covariates of days t+1 .. t+H-1 (no fire)
+    X_hist      (T, 34, p, p)   the history up to day t, T <= max_seq_len;
+                                CHANNELS below: 0..32 covariates (land cover
+                                one-hot in 3..19), 33 the daily active-fire mask
+    fut_covars  (H-1, 33, p, p) covariates of days t+1 .. t+H-1 (no fire)
     Y           (H, 1, p, p)    active-fire masks of t+1 .. t+H
     valid       (H,)            1 where Y[k] exists; the loss masks the rest
     meta        (fid, day t, (H0, W0) of the scene)
@@ -57,6 +57,37 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from paths import CHANNEL_MEANS  # noqa: E402
+
+# THE CHANNEL LAYOUT, the one place it is defined. Everything that needs a
+# count or an index imports it from here (train.py, afseq_datamodule.py,
+# exp2.py, exp4/channels.py). Changed on 2026-08-25 from 17 to 34 channels:
+# land cover went from one ordinal scalar to 17 one-hot classes (it is a
+# category, and that is how WSTS encodes it) and VNP09GA M11 joined I1/I2
+# (the one Veg channel of WSTS+ that AFSeq lacked).
+LANDCOVER_CLASSES = 17                       # MCD12Q1 IGBP classes 1..17
+CHANNELS = (["elevation", "slope", "aspect"]
+            + [f"landcover_{k}" for k in range(1, LANDCOVER_CLASSES + 1)]
+            + ["ndvi", "evi", "et",
+               "lst", "dew", "rh", "wind_speed", "wind_dir", "pressure",
+               "precipitation", "refl_i1", "refl_i2", "refl_m11", "fire"])
+N_CHANNELS = len(CHANNELS)                   # 34
+FIRE_CHANNEL = CHANNELS.index("fire")        # 33, always last
+N_COVARIATES = N_CHANNELS - 1                # what fut_covars carries
+N_STATIC = 3 + LANDCOVER_CLASSES + 3         # terrain + land cover + NDVI/EVI/ET: constant per event
+# THE PATCH: what the model sees per sample, in pixels of the 200 m grid
+# (128 px = 25.6 km). Fixed on 2026-08-25: with the v7 windows, 48% of the
+# fire days have a day-t front larger than 64 px and those days hold 81% of
+# the fire pixels; a 64-px patch saw half of the day's fire. 128 is also the
+# crop WSTS/WSTS+ train and evaluate on.
+PATCH = 128
+# Optional extra channel, NOT in CHANNELS: the hour of detection (UTC, 0-23,
+# 0 = no fire) carried as band 2 of active-fire.tif. Only the cross-benchmark
+# fusion asks for it (Seq2SeqActivePadded(with_fire_hour=True)), to fill the
+# one Veg slot of WSTS+ that AFSeq had no counterpart for; it is appended
+# after the fire channel, so X_hist then has N_CHANNELS + 1 channels.
+FIRE_HOUR_CHANNEL = N_CHANNELS
+LANDCOVER = slice(3, 3 + LANDCOVER_CLASSES)
+CH = {name: i for i, name in enumerate(CHANNELS)}
 
 
 def _add(d, n):
@@ -162,7 +193,16 @@ def normalize_dem(dem):
 
 
 def normalize_vegetation(veg):
+    """4 raw bands -> 20 channels: land cover one-hot (17), NDVI, EVI, ET.
+
+    Land cover is categorical (IGBP 1..17); it used to be written as one
+    scalar (class-1)/16, which puts "grassland" between "savanna" and
+    "cropland" on a scale that means nothing. One-hot, as WSTS does. Class 0
+    / nodata gives all zeros.
+    """
     lc, ndvi, evi, et = veg
+    lc_oh = (np.rint(lc)[None] == np.arange(1, LANDCOVER_CLASSES + 1)[:, None, None]
+             ).astype(np.float32)
 
     min_lc = 1
     max_lc = 17
@@ -181,16 +221,21 @@ def normalize_vegetation(veg):
     evi = np.clip(evi, 0, 1)
     et = np.clip(et, 0, 1)
 
-    return np.stack([lc, ndvi, evi, et])
+    return np.concatenate([lc_oh, np.stack([ndvi, evi, et])])
 
 
 def normalize_reflectance(ref):
-    I1, I2 = ref
+    """I1, I2, M11 (VNP09GA reflectance floats), same min-max for the three.
+
+    A 2-band file (trees built before M11 was added) gets M11 as NaN, which
+    impute_missing fills with the channel mean like any other hole.
+    """
     max_ref = 1.6
     min_ref = -0.01
-    I1 = np.clip((I1 - min_ref) / (max_ref - min_ref), 0, 1)
-    I2 = np.clip((I2 - min_ref) / (max_ref - min_ref), 0, 1)
-    return np.stack([I1, I2])
+    if ref.shape[0] == 2:
+        ref = np.concatenate([ref, np.full((1, *ref.shape[1:]), np.nan)])
+    return np.stack([np.clip((b - min_ref) / (max_ref - min_ref), 0, 1)
+                     for b in ref[:3]])
 
 
 def normalize_climate(climate):
@@ -284,14 +329,18 @@ def get_features(id_dir, fire_date):
             reflectance = normalize_reflectance(upsample(load_raster(refl_path)[0], target_shape))
         else:
             # NO zero-fill: 0 is zero reflectance, a real (very dark) value
-            reflectance = np.full((2, *target_shape), np.nan)
+            reflectance = np.full((3, *target_shape), np.nan)
 
         # Máscara de hoy (feature)
         today_path = date_path / "active-fire.tif"
         if not today_path.exists(): return None, None
-        today_fire_mask = load_raster(today_path)[0]
+        # binary from here on: EE writes -inf as nodata on the edge pixels of
+        # a float GeoTIFF, and the dataset overwrites this channel with the
+        # same `> 0.5` mask anyway (see Seq2SeqActivePadded.__getitem__)
+        today_fire_mask = (load_raster(today_path)[0][:1] > 0.5).astype(np.float32)   # band 1 only: band 2 is the detection hour
 
         X = np.concatenate([dem_normalized, vegetation, climate, reflectance, today_fire_mask], axis=0)
+        assert X.shape[0] == N_CHANNELS, f"{id_dir.name}/{fire_date}: {X.shape[0]} canales, esperados {N_CHANNELS}"
         X = impute_missing(X)
         return X.astype(np.float32), fire_mask[0].astype(np.float32)
 
@@ -307,7 +356,8 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     Rasters are now bigger than the patch (window_of in build_afseq.py), so a
     uniform crop would often hold no fire at all. The patch is centred on the
     bounding box of the day-t active mask and shifted by a uniform jitter of
-    up to a quarter patch in each axis, clipped to the canvas; with no fire on
+    up to a quarter patch in each axis (less if the front would not fit),
+    clipped to the canvas; with no fire on
     day t it falls back to a uniform crop. Consumes exactly two draws of the
     `random` module after random.seed(idx), so samples stay reproducible. On
     a raster that fits inside the patch in both axes it returns (0, 0), which
@@ -316,22 +366,30 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     ys, xs = np.where(mask_t > 0.5)
     if len(ys) == 0:
         return random.randint(0, tH - ph), random.randint(0, tW - ph)
-    j = ph // 4
     cy = (int(ys.min()) + int(ys.max())) // 2
     cx = (int(xs.min()) + int(xs.max())) // 2
-    top = cy - ph // 2 + random.randint(-j, j)
-    left = cx - ph // 2 + random.randint(-j, j)
+    # jitter up to a quarter patch, but never so much that a fire which fits
+    # in the patch is pushed out of it: the day-t front stays whole whenever
+    # its bounding box is smaller than the patch (85% of the fire days at
+    # 128 px). Larger fronts get whatever jitter their overhang leaves (0).
+    bh = int(ys.max()) - int(ys.min()) + 1
+    bw = int(xs.max()) - int(xs.min()) + 1
+    jy = max(0, min(ph // 4, (ph - bh) // 2))
+    jx = max(0, min(ph // 4, (ph - bw) // 2))
+    top = cy - ph // 2 + random.randint(-jy, jy)
+    left = cx - ph // 2 + random.randint(-jx, jx)
     return (int(np.clip(top, 0, tH - ph)), int(np.clip(left, 0, tW - ph)))
 
 
 class Seq2SeqActivePadded(Dataset):
-    def __init__(self, ids, DATASET, patch_size=64, max_seq_len=16,
-                 horizon=8, require_fire_on_t=True):
+    def __init__(self, ids, DATASET, patch_size=PATCH, max_seq_len=16,
+                 horizon=8, require_fire_on_t=True, with_fire_hour=False):
         # require_fire_on_t=True is AFSeq's protocol and the default, so every
         # existing experiment is untouched. False also emits the windows WSTS
         # emits and we never do -- ignition (nothing at t, fire at t+1),
         # extinction and empty -- which are 30.9% of their test and 0% of ours.
         self.DATASET = Path(DATASET)
+        self.with_fire_hour = with_fire_hour
         self.ph = patch_size; self.max_seq_len = max_seq_len; self.H = horizon
         self.samples = []
         for fid in ids:
@@ -376,9 +434,14 @@ class Seq2SeqActivePadded(Dataset):
         m, _ = load_raster(self.DATASET / fid / date / "active-fire.tif")
         return (m[0] > 0.5).astype(np.float32)
 
+    def _hour(self, fid, date):
+        """Detection hour (band 2); zeros for trees built before it existed."""
+        m, _ = load_raster(self.DATASET / fid / date / "active-fire.tif")
+        return (m[1] if m.shape[0] > 1 else np.zeros_like(m[0])).astype(np.float32)
+
     def __getitem__(self, idx):
         fid, seq_dates, last_date, future = self.samples[idx]
-        iddir = self.DATASET / fid; ph = self.ph; H = self.H; C = 17
+        iddir = self.DATASET / fid; ph = self.ph; H = self.H; C = N_CHANNELS + int(self.with_fire_hour)
         navail = len(future)
         try:
             y0 = self._active(fid, future[0]); Ho, Wo = y0.shape
@@ -401,10 +464,16 @@ class Seq2SeqActivePadded(Dataset):
                 if res[0] is not None:
                     feat = res[0].copy(); am = self._active(fid, d)
                     if am.shape == feat.shape[1:]:
-                        feat[16] = am
+                        feat[FIRE_CHANNEL] = am
                     else:
                         h = min(am.shape[0], feat.shape[1]); w = min(am.shape[1], feat.shape[2])
-                        feat[16] = 0.0; feat[16, :h, :w] = am[:h, :w]
+                        feat[FIRE_CHANNEL] = 0.0; feat[FIRE_CHANNEL, :h, :w] = am[:h, :w]
+                    if self.with_fire_hour:
+                        hr = self._hour(fid, d)
+                        hh = np.zeros(feat.shape[1:], np.float32)
+                        h = min(hr.shape[0], hh.shape[0]); w = min(hr.shape[1], hh.shape[1])
+                        hh[:h, :w] = hr[:h, :w]
+                        feat = np.concatenate([feat, hh[None]])
                     X_seq.append(crop(feat))
                 else:
                     X_seq.append(np.zeros((C, ph, ph), dtype=np.float32))
@@ -415,10 +484,10 @@ class Seq2SeqActivePadded(Dataset):
             for j in range(H - 1):
                 if j < navail - 1:
                     res = get_features(iddir, future[j])
-                    fut.append(crop(res[0])[:16] if res[0] is not None else np.zeros((16, ph, ph), np.float32))
+                    fut.append(crop(res[0])[:N_COVARIATES] if res[0] is not None else np.zeros((N_COVARIATES, ph, ph), np.float32))
                 else:
-                    fut.append(np.zeros((16, ph, ph), dtype=np.float32))
-            fut_covars = np.stack(fut).astype(np.float32) if H > 1 else np.zeros((0, 16, ph, ph), np.float32)
+                    fut.append(np.zeros((N_COVARIATES, ph, ph), dtype=np.float32))
+            fut_covars = np.stack(fut).astype(np.float32) if H > 1 else np.zeros((0, N_COVARIATES, ph, ph), np.float32)
 
             # targets + valid_mask
             Ys, valid = [], np.zeros(H, dtype=np.float32)
@@ -431,7 +500,7 @@ class Seq2SeqActivePadded(Dataset):
         except Exception as e:
             logging.error(f"❌ padded __getitem__ {fid}: {e}")
             X_hist = np.zeros((len(seq_dates), C, ph, ph), np.float32)
-            fut_covars = np.zeros((max(H - 1, 0), 16, ph, ph), np.float32)
+            fut_covars = np.zeros((max(H - 1, 0), N_COVARIATES, ph, ph), np.float32)
             Y = np.zeros((H, 1, ph, ph), np.float32); valid = np.zeros(H, np.float32)
             Ho, Wo = ph, ph
         return X_hist, fut_covars, Y, valid, (fid, last_date, (Ho, Wo))

@@ -27,7 +27,7 @@ which is measured rather than trained.
 
 THE SCORING PROTOCOL, stated once and applied to every row
 ----------------------------------------------------------
-  samples      the Test section of the split file, patch 64, max_history 16,
+  samples      the Test section of the split file, patch 128, max_history 16,
                horizon 1, require_fire_on_t=True (AFSeq's own sampler)
   scored       only samples whose t+1 target is valid (V[:,0] > 0.5), the same
                filter validation uses
@@ -45,8 +45,8 @@ pooled padded steps into the LTAE's GroupNorm statistics. All are fixed, and
 come back silently.
 
 PERSISTENCE is computed here too, from the same loader and the same filter, so
-the floor of the table is measured rather than quoted: 0.156 +- 0.011 on the
-v7 splits (1,194 events; dataset/curate.py says which 33 duplicates and 74 US
+the floor of the table is measured rather than quoted: 0.124 +- 0.013 on the
+v7 splits (1,194 events, 128-px patches; dataset/curate.py says which 33 duplicates and 74 US
 fires the build leaves out, and why). With every event on the old contour
 windows it was 0.252, and the 0.198
 of an earlier draft was a test set that no longer exists. What this prints is
@@ -83,7 +83,7 @@ EPOCHS = 20
 LOSS = "bce_dice"
 LR = 1e-3
 SEED_DEFAULT = 23          # paths.SEED: train.py omits it from the tag
-FIRE_CHANNEL = 16          # AFSeq's active-fire mask
+from dataset.afseq_loader import FIRE_CHANNEL, N_CHANNELS, PATCH  # noqa: E402
 
 ROWS = ("persistence", "unet", "convnext", "convlstm", "utae",
         "utae_res18", "utae_ar", "utae_ar4")
@@ -133,7 +133,7 @@ def matrix(out: Path, splits: str = "v7") -> list[Job]:
 
 
 # ------------------------------------------------------------------- scoring
-def afseq_loader(splits_file, patch=64, max_history=16, horizon=1,
+def afseq_loader(splits_file, patch=PATCH, max_history=16, horizon=1,
                  batch_size=4, workers=4):
     from dataset import afseq_loader
     from dataset.afseq_loader import (Seq2SeqActivePadded, collate_padded,
@@ -176,14 +176,14 @@ def score(model, name, loader, dev):
     return pooled_ap_gpu(torch.cat(ys), torch.cat(ps), device=dev), n
 
 
-def pad_invariance(model, name, dev, in_ch=17):
+def pad_invariance(model, name, dev, in_ch=N_CHANNELS):
     """A model whose answer moves when a pad frame is appended is broken."""
     if name == "persistence":
         return 0.0
     torch.manual_seed(0)
-    x = torch.rand(2, 4, in_ch, 64, 64, device=dev) + 0.01
-    xp = torch.cat([x, torch.zeros(2, 3, in_ch, 64, 64, device=dev)], 1)
-    fc = torch.rand(2, 4, 16, 64, 64, device=dev)
+    x = torch.rand(2, 4, in_ch, PATCH, PATCH, device=dev) + 0.01
+    xp = torch.cat([x, torch.zeros(2, 3, in_ch, PATCH, PATCH, device=dev)], 1)
+    fc = torch.rand(2, 4, in_ch - 1, PATCH, PATCH, device=dev)
     fwd = ((lambda m, n, X, FC, Y, tf: m(X)) if name == "utae_res18"
            else forward)
     with torch.no_grad():
@@ -202,7 +202,7 @@ def load_model(name, runs, seed, dev):
             return None
         ck = json.loads(js[0].read_text())["best_ckpt"]
         m = SMPTempModelPadded(encoder_name="resnet18", encoder_weights=None,
-                               n_channels=17, flatten_temporal_dimension=False,
+                               n_channels=N_CHANNELS, flatten_temporal_dimension=False,
                                pos_class_weight=236.0, loss_function="Focal")
         m.load_state_dict(torch.load(ck, map_location="cpu",
                                      weights_only=False)["state_dict"])

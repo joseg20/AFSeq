@@ -48,8 +48,10 @@ exports; write one per machine and `source` it before launching. Splits,
 channel means and the fusion statistics ship inside the repo (dataset/splits,
 dataset/channel_means_v5.json, experiments/exp4/afseq_channel_stats.json).
 Each event day holds `active-fire.tif` (the daily VIIRS active-fire mask, target
-and fire channel), `climate.tif` and `reflectance.tif`; `dem.tif` and
-`vegetation.tif` per event. Nothing is imported from outside the repository any more: the AFSeq loader is
+and fire channel), `climate.tif` (7 bands) and `reflectance.tif` (I1, I2, M11); `dem.tif` and
+`vegetation.tif` per event. The loader turns them into 34 model channels
+(`dataset/afseq_loader.CHANNELS`: terrain, land cover one-hot, NDVI/EVI/ET,
+seven weather channels, I1/I2/M11, active fire). Nothing is imported from outside the repository any more: the AFSeq loader is
 dataset/afseq_loader.py and the losses are training/losses.py.
 The dataset the paper uses is what `dataset/build_afseq.py --phase all`
 leaves behind: its last phase, `curate` (dataset/curate.py), moves duplicated
@@ -63,7 +65,7 @@ daily active-fire masks in one tree) reproduce exp2 and exp3. exp1, exp4 and exp
 the WSTS+ HDF5 (92 GB) and, for exp4's UTAE-AR/WSTS+ cell, the four
 best_AR_Veg_p4f{0-3} checkpoints (82 MB).
 
-## AFSeq v7: the 128-px window (the dataset the paper uses)
+## AFSeq v7: the dataset the paper uses
 
 Until 2026-08-25 every event's rasters covered its final contour plus 0.01
 deg: 91% of the events were smaller than the 64-px training patch (the loader
@@ -71,24 +73,25 @@ padded them with zeros) and the raster extent itself told a model where the
 fire would end. `build_afseq.window_of` now makes the window the contour's
 bounding box plus 5 km on every side, never smaller than 128 x 128 px at
 200 m (25.6 km, twice the patch), and the loader crops the patch around the
-day-t fire with jitter (`afseq_loader.fire_centred_crop`). Built on 2026-08-25 from the 1,301 contours in about 1 h 05 against Earth
-Engine with 34 threads (the build is resumable); curation on the new windows
-keeps 1,194 events (33 duplicates and the 15% most persistent US events out;
-64 of those 74 coincide with the list computed on the old windows). 13,927
-daily observations, 12,732 training days, 16 GB of GeoTIFF (the 30 m DEM is
-13 GB of it), 20 GB decoded cache. Persistence 0.156 +- 0.011. To rebuild:
+day-t fire with jitter (`afseq_loader.fire_centred_crop`). Built on 2026-08-25 from the 1,301 contours (window = contour bbox + 10 km,
+never below 256 x 256 px at 200 m; 34 model channels; DEM stored on the 200 m
+grid; detection hour as band 2 of the fire mask, for the fusion only). The
+curation on this tree keeps 1,194 events (33 duplicates and the 15% most
+persistent US events out). 13,874 daily observations, ~19 GB of GeoTIFF, 29 GB
+decoded cache (uint16). Persistence with the 128-px fire-centred patch:
+0.124 +- 0.013. To rebuild:
 
     source env/<machine>.sh
-    python dataset/build_afseq.py --out <new tree> --phase events --from-tree $AFSEQ_DATA
-    python dataset/build_afseq.py --out <new tree> --phase static
-    python dataset/build_afseq.py --out <new tree> --phase fire    --workers 12 &
-    python dataset/build_afseq.py --out <new tree> --phase climate --workers 12 &
-    python dataset/build_afseq.py --out <new tree> --phase reflect --workers 12 &
-    wait
-    python dataset/build_afseq.py --out <new tree> --phase audit
-    python dataset/build_afseq.py --out <new tree> --phase curate
-    AFSEQ_DATA=<new tree> python dataset/make_splits.py --seeds 5 7 23
-    AFSEQ_DATA=<new tree> python dataset/afseq_cache.py --build && ... --check 60
+    python dataset/build_afseq.py --out <tree> --phase events --contours fires.geojson
+    python dataset/build_afseq.py --out <tree> --phase all --workers 12
+
+`--phase all` runs everything after the events phase in one go: fire, static,
+climate, reflect, a repair pass over the daily layers, the audit, the curation
+(duplicates and the 15% most persistent US events out), the splits, the
+decoded cache with its identity check, and the channel statistics. Each step
+is also its own `--phase`, and the whole thing is resumable: a raster that is
+already healthy is never downloaded twice. To reproduce an existing tree's
+event list instead of a contour file: `--phase events --from-tree <old> --fresh`.
 
 Every number of exp2 and exp3 is trained on this tree.
 

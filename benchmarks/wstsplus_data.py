@@ -137,7 +137,7 @@ def _base_class():
 
 def make_dataset(fold: int, part: str, data_dir: str, features: str = "All",
                  history: str = "fixed", n_history: int = 5, max_history: int = 16,
-                 horizon: int = 5, crop: int = 64, is_train: bool | None = None,
+                 horizon: int = 5, crop: int = 128, is_train: bool | None = None,
                  require_fire_on_t: bool = False):
     """One part ("train"/"val"/"test") of a published 4-fold."""
     Base = _base_class()

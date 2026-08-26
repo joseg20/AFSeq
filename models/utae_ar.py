@@ -622,7 +622,7 @@ class UTAE_AR(nn.Module):
 
     def __init__(
         self,
-        input_dim: int = 17,
+        input_dim: int = 34,
         encoder_widths: Sequence[int] | None = None,
         decoder_widths: Sequence[int] | None = None,
         out_conv: Sequence[int] = (32, 1),

@@ -23,7 +23,7 @@ what is left. Two rules, both decided on 2026-08-25 with the numbers below:
    the same floor (0.168 / 0.173 / 0.156) and the dataset at 0.167, the level
    of WSTS+ under the same sampler (0.200). Chile and S.Europe are untouched.
    Persistence is ranked by the Jaccard of consecutive daily masks counted in
-   64-px crops centred on the day-t fire with jitter, four per day, the way
+   128-px crops centred on the day-t fire with jitter, four per day, the way
    the loader samples; the count
    is deterministic (days sorted, one RNG per event seeded by its id).
 
@@ -98,7 +98,7 @@ def duplicate_events(tree: Path) -> dict:
 
 
 # ------------------------------------------------- rule 2: slow US fronts
-def fire_stats(tree: Path, fids=None, patch: int = 64, crops: int = 4) -> dict:
+def fire_stats(tree: Path, fids=None, patch: int = 128, crops: int = 4) -> dict:
     """Per event: TP/FP/FN/P/N of "tomorrow = today", days, burned, region.
 
     Counted inside random `patch`-sized crops, `crops` per sampled day (fire
@@ -124,10 +124,11 @@ def fire_stats(tree: Path, fids=None, patch: int = 64, crops: int = 4) -> dict:
             ys, xs = np.where(mp)      # crops centred on the day-t fire, as the loader
             cy = (int(ys.min()) + int(ys.max())) // 2
             cx = (int(xs.min()) + int(xs.max())) // 2
-            j = patch // 4
+            jy = max(0, min(patch // 4, (patch - (int(ys.max()) - int(ys.min()) + 1)) // 2))
+            jx = max(0, min(patch // 4, (patch - (int(xs.max()) - int(xs.min()) + 1)) // 2))
             for _ in range(crops):
-                t = int(np.clip(cy - patch // 2 + rng.integers(-j, j + 1), 0, th - patch))
-                l = int(np.clip(cx - patch // 2 + rng.integers(-j, j + 1), 0, tw - patch))
+                t = int(np.clip(cy - patch // 2 + rng.integers(-jy, jy + 1), 0, th - patch))
+                l = int(np.clip(cx - patch // 2 + rng.integers(-jx, jx + 1), 0, tw - patch))
                 mc, yc = mp[t:t + patch, l:l + patch], yp[t:t + patch, l:l + patch]
                 TP += int((mc & yc).sum()); FP += int((mc & ~yc).sum())
                 FN += int((~mc & yc).sum()); P += int(yc.sum()); N += yc.size

@@ -65,7 +65,7 @@ class FusedDataModule(pl.LightningDataModule):
     """The fused Veg dataset, shaped as (x, y) for their BaseModel."""
 
     def __init__(self, fold: int, source: str, batch_size: int, workers: int,
-                 patch: int = 64):
+                 patch: int = 128):
         super().__init__()
         self.save_hyperparameters()
         self._sets = {}
@@ -134,7 +134,7 @@ def main():
     p.add_argument("--source", default="both",
                    choices=["both", "wstsplus", "afseq"])
     p.add_argument("--fold", type=int, default=0, choices=[0, 1, 2, 3])
-    p.add_argument("--patch", type=int, default=64)
+    p.add_argument("--patch", type=int, default=128)
     p.add_argument("--batch-size", type=int, default=THEIR_CFG["batch_size"])
     p.add_argument("--lr", type=float, default=THEIR_CFG["lr"])
     p.add_argument("--max-steps", type=int, default=THEIR_CFG["max_steps"])

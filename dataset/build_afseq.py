@@ -9,16 +9,16 @@ here, so this file -- not a sequence of patches -- is what defines the dataset.
     python build_afseq.py --out /path/new --phase events --contours fires.geojson
     python build_afseq.py --out /path/new --phase events --from-tree /path/old_tree
                                     # same 1,194 events, new window (bbox + 5 km, >= 128 px)
-    python build_afseq.py --out /path/new --phase all
+    python build_afseq.py --out /path/new --phase all     # everything, start to finish:
+        # events must exist (see above); then fire, static, climate, reflect, a repair
+        # pass, audit, curate, splits, cache (+ identity check), channel stats
     python build_afseq.py --out /path/tree --phase climate --workers 16
     python build_afseq.py --out /path/tree --phase audit
     python build_afseq.py --out /path/tree --phase curate   # last step of "all"
-    python build_afseq.py --out /path/tree --phase adopt-active --active <dir>
-                                    # one-off: take masks from a separate tree
 
 Layout produced, per event and per day:
     <out>/<id>/info.geojson  contour.geojson  dem.tif  vegetation.tif
-    <out>/<id>/<YYYY-MM-DD>/active-fire.tif  climate.tif  reflectance.tif
+    <out>/<id>/<YYYY-MM-DD>/active-fire.tif  climate.tif  reflectance.tif (I1, I2, M11)
 
 THE RULE THIS PIPELINE EXISTS TO ENFORCE: never write a plausible constant for
 missing data. The previous version answered an empty collection with
@@ -67,6 +67,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import subprocess
 import shutil
 import math
 import os
@@ -86,6 +87,7 @@ from rasterio.warp import Resampling, reproject
 import ee
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
 from paths import EE_PROJECT as PROJECT, AFSEQ as DEFAULT_OUT  # noqa: E402
 FIRE_PRODUCT = "NASA/LANCE/SNPP_VIIRS/C2"
 FIRE_PRODUCT_N20 = "NASA/LANCE/NOAA20_VIIRS/C2"   # same instrument, 50 min apart
@@ -137,7 +139,9 @@ def retry(fn, *a, **kw):
             return fn(*a, **kw)
         except NoData:
             raise
-        except Exception:                                  # noqa: BLE001
+        except Exception as e:                             # noqa: BLE001
+            if "http 4" in str(e):          # 400/403/404: not transient
+                raise
             if attempt == MAX_TRIES - 1:
                 raise
             time.sleep(min(60, 2 ** attempt) * (1 + random.random()))
@@ -149,7 +153,7 @@ def download(img, region, scale, ref_path=None, resampling=Resampling.bilinear):
         {"scale": scale, "region": region, "format": "GEO_TIFF"})
     r = requests.get(url, timeout=240)
     if r.status_code != 200:
-        raise RuntimeError(f"http {r.status_code}")
+        raise RuntimeError(f"http {r.status_code}: {r.text[:200]}")
     if ref_path is None:
         return r.content
     with rasterio.open(ref_path) as d:
@@ -178,7 +182,7 @@ def write_tif(path: Path, arr, profile):
 
 
 # ----------------------------------------------------------------- fire mask
-def fetch_fire(region, date, out_path):
+def fetch_fire(region, date, out_path, ref_path=None):
     """The DAILY ACTIVE-FIRE mask: VIIRS detections of that one day only.
 
     SNPP and NOAA-20 together: same instrument, same 375 m, two looks per day
@@ -195,12 +199,31 @@ def fetch_fire(region, date, out_path):
     if retry(lambda: col.size().getInfo()) == 0:
         raise NoData("sin paso de VIIRS")
     fire = col.map(lambda im: im.select("Bright_ti5").gt(279).rename("burned")).mosaic()
-    mask = ee.Image.constant(0).rename("burned").blend(fire).clip(region).toFloat()
-    data = retry(download, mask, region, SCALE_FIRE)
-    with rasterio.open(io.BytesIO(data)) as s:
-        arr, prof = s.read().astype("float64"), s.profile.copy()
+    # Band 2: hour of detection (UTC, 0-23), the latest pass where SNPP and
+    # NOAA-20 both saw the pixel; 0 where there is no fire, as WSTS stores
+    # it. NOT a model channel (dataset/afseq_loader.CHANNELS stays at 34):
+    # only the cross-benchmark fusion reads it, to fill the one Veg slot of
+    # WSTS+ that AFSeq had no counterpart for.
+    hour = (col.map(lambda im: im.select("acq_time").divide(3600).floor()
+                    .updateMask(im.select("Bright_ti5").gt(279)).rename("hour"))
+            .reduce(ee.Reducer.max()).rename("hour"))
+    # unmask(0): otherwise EE writes -inf (nodata) on edge pixels the clip
+    # leaves partially outside; the loader binarises with > 0.5 either way
+    mask = (ee.Image.constant(0).rename("burned").blend(fire)
+            .addBands(ee.Image.constant(0).rename("hour").blend(hour))
+            .clip(region).unmask(0).toFloat())
+    if ref_path is not None and Path(ref_path).exists():
+        # ON THE EVENT'S EXISTING GRID. A fresh download lands on a grid EE
+        # rounds on its own, one pixel off the earlier layers for some
+        # events (310 vs 309 columns on id_0001 when fire was re-downloaded
+        # for the hour band). Nearest neighbour: both bands are categorical.
+        arr, prof = retry(download, mask, region, SCALE_FIRE, ref_path, Resampling.nearest)
+    else:
+        data = retry(download, mask, region, SCALE_FIRE)
+        with rasterio.open(io.BytesIO(data)) as s:
+            arr, prof = s.read().astype("float64"), s.profile.copy()
     write_tif(out_path, arr, prof)
-    return "viirs_snpp+n20"
+    return "viirs_snpp+n20+hour"
 
 
 # -------------------------------------------------------------------- climate
@@ -321,12 +344,16 @@ def fetch_climate(region, date, out_path, ref_path, event_id):
 # ---------------------------------------------------------------- reflectance
 def fetch_reflectance(region, date, out_path, ref_path):
     d0 = ee.Date(date)
+    # I1 (0.64 um) and I2 (0.86 um) on the 500 m grid, M11 (1.6 um SWIR) on
+    # the 1 km grid: the three VNP09GA bands WSTS uses, in the order the
+    # loader unpacks them. M11 was added on 2026-08-25 (it was the one Veg
+    # channel AFSeq lacked; exp4 had to fill it with a constant).
     col = (ee.ImageCollection(REFL_PRODUCT).filterDate(d0, d0.advance(1, "day"))
-           .filterBounds(region).select(["I1", "I2"]))
+           .filterBounds(region).select(["I1", "I2", "M11"]))
     if retry(lambda: col.size().getInfo()) == 0:
         raise NoData("VNP09GA sin imagen")
     # Collection 2 already serves reflectance floats -- no x0.0001 here
-    img = col.mean().rename(["I1", "I2"])
+    img = col.mean().rename(["I1", "I2", "M11"])
     if ref_path and Path(ref_path).exists():
         arr, prof = retry(download, img, region, SCALE_REFL, ref_path)
     else:
@@ -353,11 +380,12 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
     features/vegetation.py), band for band, because the loader unpacks them
     positionally (afseq_loader.normalize_dem / normalize_vegetation):
 
-      dem.tif         3 bands, float32, UTM zone of the event centre, ~30 m:
+      dem.tif         3 bands, float32, ON THE FIRE GRID (200 m, EPSG:4326):
                       elevation (m), slope (deg), aspect (deg, 0 = N,
                       clockwise). SRTM GL1 v003 downloaded in EPSG:4326 at
                       30 m, reprojected to UTM (bilinear), slope and aspect
-                      by Horn's kernels / (8 * pixel size).
+                      by Horn's kernels / (8 * pixel size) at 30 m, then
+                      block-averaged onto the fire grid (Resampling.average).
       vegetation.tif  4 bands at 200 m, EPSG:4326, in THIS order:
                       land cover (MCD12Q1 LC_Type1, mode of the two years
                       before the event), NDVI, EVI (MOD13Q1 mean of the 30
@@ -382,7 +410,22 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
     dem_p = event_dir / "dem.tif"
     if force or not dem_p.exists():
         srtm = ee.Image("USGS/SRTMGL1_003").select("elevation").clip(region)
-        data = retry(download, srtm, region, 30)
+        # 30 m, or coarser for the few events whose 30 m DEM exceeds EE's
+        # 50 MB download cap (HTTP 400): 60 m, then 90 m. Slope and aspect
+        # are then computed at that resolution; the result is averaged onto
+        # the 200 m fire grid either way, and the scale used is returned in
+        # the provenance.
+        dem_scale = None
+        for sc in (30, 60, 90):
+            try:
+                data = retry(download, srtm, region, sc)
+                dem_scale = sc
+                break
+            except RuntimeError as e:
+                if "400" not in str(e):
+                    raise
+        if dem_scale is None:
+            raise NoData("DEM: incluso a 90 m supera el tope de descarga de EE")
         with rasterio.open(io.BytesIO(data)) as s_:
             dem = s_.read(1).astype("float32")
             src_tr, src_crs, b = s_.transform, s_.crs, s_.bounds
@@ -402,12 +445,31 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
         aspect = (np.degrees(np.arctan2(dzdy, -dzdx)) + 360) % 360
         arr = np.stack([dem_utm, slope, aspect]).astype("float32")
         assert arr.shape[0] == 3
-        prof = dict(driver="GTiff", height=h, width=w, count=3, dtype="float32",
-                    crs=dst_crs, transform=dst_tr, compress="deflate")
-        with rasterio.open(dem_p, "w", **prof) as d:
-            d.write(arr)
-            d.descriptions = ("elevation_m", "slope_deg", "aspect_deg")
-        made.append("dem")
+        if ref is not None:
+            # STORED ON THE FIRE GRID (200 m). Slope and aspect are computed
+            # at 30 m in UTM, where they mean something, then block-averaged
+            # onto the event's grid: that average is all the loader ever used
+            # (downsample_average), and keeping the 30 m raster made the DEM
+            # 80% of the dataset (13 GB of 16 at 128-px windows, ~50 GB at
+            # 256). Same numbers, a fraction of the bytes.
+            with rasterio.open(ref) as r_:
+                prof = r_.profile.copy(); shape, tr_out, crs_out = (r_.height, r_.width), r_.transform, r_.crs
+            out = np.zeros((3, *shape), dtype="float32")
+            for b in range(3):
+                reproject(source=arr[b], destination=out[b], src_transform=dst_tr,
+                          src_crs=dst_crs, dst_transform=tr_out, dst_crs=crs_out,
+                          resampling=Resampling.average)
+            prof.update(count=3, dtype="float32", compress="deflate", nodata=None)
+            with rasterio.open(dem_p, "w", **prof) as d:
+                d.write(out)
+                d.descriptions = ("elevation_m", "slope_deg", "aspect_deg")
+        else:
+            prof = dict(driver="GTiff", height=h, width=w, count=3, dtype="float32",
+                        crs=dst_crs, transform=dst_tr, compress="deflate")
+            with rasterio.open(dem_p, "w", **prof) as d:
+                d.write(arr)
+                d.descriptions = ("elevation_m", "slope_deg", "aspect_deg")
+        made.append("dem" if dem_scale == 30 else f"dem@{dem_scale}m")
 
     veg_p = event_dir / "vegetation.tif"
     if force or not veg_p.exists():
@@ -440,8 +502,23 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
             # and get_features cannot stack them. Nearest neighbour: land
             # cover is categorical, and nearest is what EE's own reprojection
             # did for every layer of the earlier datasets.
-            arr, prof = retry(download, veg, region, 200, ref, Resampling.nearest)
+            # Scale ladder: for the largest windows EE answers "User memory
+            # limit exceeded" (HTTP 400) at 200 m; 250 m is MOD13Q1's native
+            # grid and 500 m MCD12Q1/MOD16A2's, so nothing real is lost
+            # there. The scale used goes into the provenance.
+            veg_scale = None
+            for sc in (200, 250, 500):
+                try:
+                    arr, prof = retry(download, veg, region, sc, ref, Resampling.nearest)
+                    veg_scale = sc
+                    break
+                except RuntimeError as e:
+                    if "400" not in str(e):
+                        raise
+            if veg_scale is None:
+                raise NoData("vegetacion: EE sin memoria incluso a 500 m")
         else:
+            veg_scale = 200
             data = retry(download, veg, region, 200)
             with rasterio.open(io.BytesIO(data)) as s_:
                 arr, prof = s_.read().astype("float64"), s_.profile.copy()
@@ -450,7 +527,7 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
         write_tif(veg_p, arr, prof)
         with rasterio.open(veg_p, "r+") as d:
             d.descriptions = ("landcover", "NDVI", "EVI", "ET")
-        made.append("vegetation")
+        made.append("vegetation" if veg_scale == 200 else f"vegetation@{veg_scale}m")
     return "+".join(made) if made else "ya estaba"
 
 
@@ -486,8 +563,8 @@ def run_static(out: Path, workers: int, force: bool):
 
 
 # ------------------------------------------------------------------ events
-MARGIN_KM = 5.0        # around the final contour, every side
-MIN_PX = 128           # window never smaller than this, at SCALE_FIRE
+MARGIN_KM = 10.0       # around the final contour, every side
+MIN_PX = 256           # window never smaller than this, at SCALE_FIRE
 
 
 def window_of(geometry, margin_km: float = MARGIN_KM, min_px: int = MIN_PX,
@@ -499,9 +576,10 @@ def window_of(geometry, margin_km: float = MARGIN_KM, min_px: int = MIN_PX,
     where the fire would end, and 91% of the events were smaller than the
     64-px training patch, which the loader filled with zeros. Now: the
     contour's bounding box, `margin_km` on every side, and never less than
-    `min_px` pixels of `scale_m` in either axis (128 px = 25.6 km, twice the
-    patch, the crop WSTS+ evaluates on), grown symmetrically about the box
-    centre. Rasters bigger than the patch make the random crop random.
+    `min_px` pixels of `scale_m` in either axis (256 px = 51 km: twice the
+    128-px patch, the window:patch ratio of WSTS+, whose ~284-px windows hold
+    128-px crops), grown symmetrically about the box centre. A window twice
+    the patch is what makes the fire-centred crop's jitter real.
     """
     c = geometry["coordinates"]
     pts = []
@@ -574,7 +652,7 @@ def run_events(out: Path, contours: Path, margin_km: float = MARGIN_KM,
 
 
 def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
-                         min_px: int = MIN_PX):
+                         min_px: int = MIN_PX, inherit: bool = True):
     """Same skeleton, but from an existing tree: its ids, contours and the
     days it actually has (not start/end: holes stay holes). This is how the
     1,194 events of dataset_v6 were re-downloaded into dataset_v7."""
@@ -592,7 +670,7 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
     # ids, so `--phase curate` on the new tree is a no-op instead of taking
     # another 15% of what is left (which is what happened on 2026-08-25).
     src_ex = Path(src) / "excluded.json"
-    if src_ex.exists():
+    if inherit and src_ex.exists():
         rec = json.loads(src_ex.read_text())
         rec["inherited_from"] = str(src_ex)
         (out / "excluded.json").write_text(json.dumps(rec, indent=1))
@@ -690,7 +768,13 @@ def run_phase(out: Path, phase: str, workers: int, limit: int, force: bool):
                 regions[ev] = region_of(out / ev)
         region, ref = regions[ev]
         if phase == "fire":
-            return fetcher(region, day, target)
+            # the grid reference for a fire re-download is any OTHER layer
+            # of the event (they were put on the first fire raster's grid);
+            # on a fresh build none exists yet and fire defines the grid
+            others = [out / ev / day / "climate.tif", out / ev / day / "reflectance.tif",
+                      out / ev / "vegetation.tif", out / ev / "dem.tif"]
+            ref_fire = next((p for p in others if p.exists()), None)
+            return fetcher(region, day, target, ref_fire)
         if phase == "climate":
             return fetcher(region, day, target, ref, ev)
         return fetcher(region, day, target, ref)
@@ -781,18 +865,19 @@ def main():
                     help="arbol del dataset (por defecto, paths.AFSEQ)")
     ap.add_argument("--phase", default="all",
                     choices=["all", "events", "static", "fire", "climate",
-                             "reflect", "audit", "curate", "adopt-active"])
-    ap.add_argument("--active", type=Path, default=None,
-                    help="adopt-active: arbol <id>/<fecha>.tif de mascaras ya "
-                         "descargadas, copiadas a <out>/<id>/<fecha>/active-fire.tif")
+                             "reflect", "audit", "curate", "splits", "cache",
+                             "stats"])
     ap.add_argument("--drop", nargs="+", metavar="REGION=FRAC", default=None,
                     help="curate: fraccion de eventos mas persistentes a excluir "
                          "por region (por defecto US=0.15, ver dataset/curate.py)")
     ap.add_argument("--contours", type=Path,
                     help="GeoJSON de contornos para --phase events")
-    ap.add_argument("--from-tree", type=Path,
+    ap.add_argument("--from-tree", type=Path, nargs="+",
                     help="events: recrear los eventos (ids, contornos, dias) de "
-                         "un arbol existente con la ventana nueva")
+                         "uno o mas arboles existentes con la ventana nueva")
+    ap.add_argument("--fresh", action="store_true",
+                    help="events --from-tree: NO heredar excluded.json, para que "
+                         "--phase curate se calcule de nuevo sobre el arbol final")
     ap.add_argument("--margin-km", type=float, default=MARGIN_KM)
     ap.add_argument("--min-px", type=int, default=MIN_PX)
     ap.add_argument("--workers", type=int, default=12)
@@ -806,15 +891,17 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "curate":
         return run_curate(args)
-    if args.phase == "adopt-active":
-        return adopt_active(args.out, args.active)
+    if args.phase in ("splits", "cache", "stats"):
+        return run_post(args.out, args.phase)
     ee.Initialize(project=PROJECT)
     if args.phase == "audit":
         audit(args.out)
         return 0
     if args.phase == "events":
         if args.from_tree:
-            run_events_from_tree(args.out, args.from_tree, args.margin_km, args.min_px)
+            for src in args.from_tree:
+                run_events_from_tree(args.out, src, args.margin_km, args.min_px,
+                                     inherit=not args.fresh)
         else:
             run_events(args.out, args.contours, args.margin_km, args.min_px)
         return 0
@@ -826,10 +913,43 @@ def main():
             run_static(args.out, args.workers, args.force)
         else:
             run_phase(args.out, ph, args.workers, args.limit, args.force)
-    audit(args.out)
     if args.phase == "all":
+        # ONE COMMAND, START TO FINISH. A second pass over the daily layers
+        # rebuilds whatever Earth Engine answered badly the first time (sick()
+        # finds it: missing, empty, faked constants), then the audit, the
+        # curation, the splits, the decoded cache with its identity check and
+        # the channel statistics. Every step is also its own --phase.
+        for ph in ("fire", "climate", "reflect"):
+            run_phase(args.out, ph, args.workers, args.limit, False)
+        audit(args.out)
         run_curate(args)         # what leaves the dataset, and why: curate.py
+        for step in ("splits", "cache", "stats"):
+            run_post(args.out, step)
+    else:
+        audit(args.out)
     return 0
+
+
+def run_post(out: Path, step: str):
+    """The steps after the download, on the curated tree, with the release's
+    own tools: splits (dataset/make_splits.py), the decoded cache and its
+    identity check (dataset/afseq_cache.py), channel statistics
+    (dataset/channel_stats.py). Each one reads AFSEQ_DATA, so it is pointed
+    at `out` here."""
+    os.environ["AFSEQ_DATA"] = str(out)
+    os.environ.setdefault("AFSEQ_CACHE", str(out) + "_cache")
+    cmd = {"splits": ["dataset/make_splits.py", "--seeds", "5", "7", "23"],
+           "cache": ["dataset/afseq_cache.py", "--build", "--procs", "4"],
+           "stats": ["dataset/channel_stats.py", "--days", "3000"]}[step]
+    log(f"fase {step}: {' '.join(cmd)}")
+    rc = subprocess.call([sys.executable, str(ROOT / cmd[0])] + cmd[1:],
+                         cwd=str(ROOT))
+    if step == "cache" and rc == 0:
+        rc = subprocess.call([sys.executable, str(ROOT / "dataset/afseq_cache.py"),
+                              "--check", "40"], cwd=str(ROOT))
+    if rc != 0:
+        raise SystemExit(f"fase {step} fallo (rc={rc})")
+    return rc
 
 
 def run_curate(args):
@@ -838,29 +958,6 @@ def run_curate(args):
     drop = ({k: float(v) for k, v in (d.split("=") for d in args.drop)}
             if args.drop else DROP_DEFAULT)
     curate(args.out, drop)
-    return 0
-
-
-def adopt_active(out: Path, active: Path):
-    """Copy an existing <active>/<id>/<date>.tif tree into the dataset tree.
-
-    Until 2026-08-25 the daily active masks lived in a second tree
-    (create-dataset/fires_active_v4, made by generate_active.py with the same
-    product fetch_fire now downloads). This folds such a tree in, so the
-    dataset directory is self-contained; it is a copy, bytes unchanged.
-    """
-    if not active:
-        raise SystemExit("--phase adopt-active necesita --active <arbol>")
-    n = miss = 0
-    for ev in sorted(p for p in Path(active).iterdir() if p.name.startswith("id_")):
-        for t in sorted(ev.glob("*.tif")):
-            ddir = out / ev.name / t.stem
-            if not ddir.is_dir():
-                miss += 1
-                continue
-            shutil.copyfile(t, ddir / "active-fire.tif")
-            n += 1
-    log(f"adopt-active: {n} mascaras copiadas a {out}, {miss} sin directorio de dia")
     return 0
 
 

@@ -69,6 +69,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "models"))
 
+from dataset.afseq_loader import N_CHANNELS, PATCH         # noqa: E402
 from paths import (AFSEQ, AFSEQ_SPLITS,
                    RUNS, SEED)  # noqa: E402
 from evaluation.metrics import pooled_ap_gpu                     # noqa: E402
@@ -81,7 +82,7 @@ LOSSES = ("focal", "bce_dice", "bce", "dice", "jaccard")
 
 
 # --------------------------------------------------------------------- model
-def build_model(name: str, horizon: int, in_ch: int = 17):
+def build_model(name: str, horizon: int, in_ch: int = N_CHANNELS, patch: int = PATCH):
     """Instantiate with the paper's architecture hyper-parameters."""
     if name == "unet":
         from unet import UNet
@@ -92,7 +93,7 @@ def build_model(name: str, horizon: int, in_ch: int = 17):
                             out_channels=1)
     if name == "convlstm":
         from convlstm import ConvLSTM_Seg
-        return ConvLSTM_Seg(num_classes=1, input_size=(64, 64), input_dim=in_ch,
+        return ConvLSTM_Seg(num_classes=1, input_size=(patch, patch), input_dim=in_ch,
                             hidden_dim=64, kernel_size=(3, 3))
     if name == "utae":
         from utae import UTAE
@@ -204,7 +205,7 @@ def main():
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--pos-weight", type=float, default=20.0)
-    ap.add_argument("--patch", type=int, default=64)
+    ap.add_argument("--patch", type=int, default=PATCH)
     ap.add_argument("--max-history", type=int, default=16)
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--tf-mode", default="linear", choices=["linear", "ss", "none"],
@@ -332,7 +333,7 @@ def main():
                                        args.max_history, H)
 
         coll = lambda b: collate_padded(b, 0.0)                  # noqa: E731
-        in_ch = 17
+        in_ch = N_CHANNELS
     common = dict(collate_fn=coll, pin_memory=True,
                   persistent_workers=args.workers > 0)
     tl = DataLoader(split("Train"), args.batch_size, shuffle=True,
@@ -340,7 +341,7 @@ def main():
     vl = DataLoader(split("Val"), args.batch_size, shuffle=False,
                     num_workers=max(2, args.workers // 2), **common)
 
-    model = build_model(args.model, H, in_ch=in_ch).to(dev)
+    model = build_model(args.model, H, in_ch=in_ch, patch=args.patch).to(dev)
     n_par = sum(p.numel() for p in model.parameters())
     logging.info(f"{args.benchmark} {args.model} H={H} loss={args.loss} lr={args.lr:g} "
                  f"| {n_par:,} parametros | {dev}")

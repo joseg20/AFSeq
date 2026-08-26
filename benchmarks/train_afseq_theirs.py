@@ -112,7 +112,7 @@ def main():
                    help="fixed T. Default None = AFSeq's real variable length, "
                         "masked in the temporal attention. SMPModel needs a "
                         "value here; utae_res18 does not.")
-    p.add_argument("--patch", type=int, default=64)
+    p.add_argument("--patch", type=int, default=128)
     p.add_argument("--max-history", type=int, default=16)
     p.add_argument("--batch-size", type=int, default=THEIR_CFG["batch_size"])
     p.add_argument("--lr", type=float, default=THEIR_CFG["lr"])
