@@ -14,6 +14,7 @@ to launch them, and knows how to score them:
 | `exp3.py` | the teacher-forcing schedule ablation for UTAE-AR on AFSeq |
 | `exp4/` | the cross-benchmark table on the AFSeq+WSTS+ fusion (Veg space), plus the native WSTS+ baseline |
 | `exp5/` | the two-panel UMAP figure, from the encoder `exp4/native.py` trains |
+| `exp6.py` | supplementary: leave-one-region-out on AFSeq (S.America / US / S.Europe), UTAE-AR and UTAE-Res18, against exp2's checkpoints on the same fires |
 | `runner.py` | the shared job runner: lanes, one GPU, resumable, hard CPU ceiling |
 
 `--only SUBSTR...` restricts `--launch` to the jobs whose name contains one of

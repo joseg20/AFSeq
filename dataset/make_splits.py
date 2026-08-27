@@ -17,6 +17,12 @@ window, keeping every region's share of fires, sampled days and burned pixels
 within `--tol`. It exists for benchmark studies (what if the test floor were
 X?) and is not what produced the shipped splits. Persistence of the shipped
 splits, measured with exp2.py --table --rows persistence: 0.124 +- 0.013 (dataset_v7).
+
+`--holdout REGION [REGION ...]` writes leave-one-region-out splits instead
+(experiments/exp6.py): Test = EVERY event of that region, Train/Val = the other
+regions, split at random with the same train:val ratio as the shipped splits
+(70:15) and the same RNG discipline (ids sorted before shuffling, one RNG per
+seed). Nothing is pinned. -> splits_<tag>_loro_<slug>.txt, slug in REGION_SLUG.
 """
 from __future__ import annotations
 
@@ -120,6 +126,49 @@ def build(stats, seed, lo, hi, tol, also_val):
                 test_ap_before=ap0, swaps=dict(test=it_te, val=it_va))
 
 
+# file-name slug of each region label of dataset/curate.py:region_of. "Chile"
+# is the label the curation gives the WHOLE southern hemisphere (Chile,
+# Argentina, Bolivia; 59 / 254 / 140 events in v7): the slug says so.
+REGION_SLUG = {"Chile": "southam", "US": "us", "S.Europe": "seurope"}
+
+
+def build_holdout(stats, region: str, seed: int) -> dict:
+    """Leave-one-region-out: Test = all of `region`, Train/Val = the rest.
+
+    Val is drawn at random from the OTHER regions, stratified per region,
+    with the train:val ratio of the shipped splits (FRACS[0]:FRACS[1]), so a
+    model is selected on the distribution it was trained on and the held-out
+    region is seen exactly once, at test time.
+    """
+    if region not in REGION_SLUG:
+        raise SystemExit(f"region {region!r}: debe ser una de {sorted(REGION_SLUG)}")
+    rng = np.random.default_rng(seed)
+    fids = sorted(stats)
+    by_region = defaultdict(list)
+    for f in fids:
+        by_region[stats[f]["region"]].append(f)
+    if region not in by_region:
+        raise SystemExit(f"region {region!r}: sin eventos en las estadisticas")
+    val_frac = FRACS[1] / (FRACS[0] + FRACS[1])
+    tr, va = [], []
+    for r in sorted(by_region):
+        if r == region:
+            continue
+        ids = sorted(by_region[r]); rng.shuffle(ids)
+        b = int(round(len(ids) * val_frac))
+        va += ids[:b]; tr += ids[b:]
+    te = sorted(by_region[region])
+    # the three sets partition the dataset, and test is the whole region
+    assert not (set(tr) & set(va)) and not (set(tr) & set(te)) and not (set(va) & set(te))
+    assert sorted(tr + va + te) == fids
+    assert all(stats[f]["region"] == region for f in te)
+    assert all(stats[f]["region"] != region for f in tr + va)
+    return dict(train=sorted(tr), val=sorted(va), test=te,
+                ap=dict(train=ap_of(stats, tr), val=ap_of(stats, va),
+                        test=ap_of(stats, te)),
+                test_ap_before=ap_of(stats, te), swaps=dict(test=0, val=0))
+
+
 def report(stats, split):
     ref = shares(stats, sorted(stats))
     print(f"    {'':10s}" + "".join(f"{r:>22s}" for r in sorted(ref)))
@@ -149,6 +198,10 @@ def main():
     ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats_v7.json",
                     help="cache de las estadisticas por evento (se recalcula si falta)")
     ap.add_argument("--no-write", action="store_true", help="solo estimar")
+    ap.add_argument("--holdout", nargs="+", metavar="REGION", default=None,
+                    help="leave-one-region-out: Test = toda la region, Train/Val = "
+                         "el resto (experiments/exp6.py). Regiones: "
+                         + ", ".join(sorted(REGION_SLUG)))
     a = ap.parse_args()
 
     if a.stats.exists():
@@ -159,6 +212,20 @@ def main():
     fids = sorted(stats)
     print(f"{len(fids)} eventos en {AFSEQ}; persistencia estimada del conjunto: "
           f"{ap_of(stats, fids):.3f}")
+    if a.holdout:
+        if a.target:
+            raise SystemExit("--holdout no se combina con --target: nada se fija")
+        seed = a.seeds[0]
+        for region in a.holdout:
+            sp = build_holdout(stats, region, seed)
+            p = SPLIT_DIR / f"splits_{a.tag}_loro_{REGION_SLUG[region]}.txt"
+            if not a.no_write:
+                p.write_text("\n".join(["Train"] + sp["train"] + ["", "Val"] + sp["val"]
+                                       + ["", "Test"] + sp["test"]) + "\n")
+            print(f"\n  holdout {region} (s{seed}): test = {len(sp['test'])} eventos, "
+                  f"AP~ {sp['ap']['test']:.3f}  -> {p}")
+            report(stats, sp)
+        return
     lo, hi = a.target if a.target else (None, None)
     for seed in a.seeds:
         sp = build(stats, seed, lo, hi, a.tol, a.also_val)
