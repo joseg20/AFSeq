@@ -10,3 +10,7 @@ wandb/
 *.log
 .claude/
 *.tar.zst
+.venv/
+*.png
+*.pdf
+*.npz

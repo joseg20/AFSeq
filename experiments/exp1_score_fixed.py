@@ -5,7 +5,7 @@ Los JSON de los checkpoints publicados solo guardan best_val_ap; la tabla
 principal reporta AP de TEST. Esto lo mide con el protocolo de siempre
 (pooled a t+1, crop 128, mascara de validez) para poder desglosar por fold.
 """
-import argparse, json, sys
+import argparse, json, os, sys
 from pathlib import Path
 import numpy as np
 import torch
@@ -16,10 +16,11 @@ for p in (ROOT, ROOT/"models", ROOT/"training", ROOT/"benchmarks", ROOT/"experim
     sys.path.insert(0, str(p))
 from evaluation.metrics import pooled_ap_gpu
 from train import build_model
+import paths
 from wstsplus_data import FEATURES, make_dataset
 
-ANCHOR = Path("/workspace1/users/josegui/data/wstsplus/runs_folds4")
-HDF5 = "/workspace1/users/josegui/data/wstsplus/wsts8/hdf5"
+ANCHOR = Path(os.environ.get("WSTS_ANCHORS", str(paths.DATA / "wstsplus" / "runs_folds4")))
+HDF5 = str(paths.WSTS_HDF5)
 dev = "cuda"
 
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--features", nargs="+", default=["Veg", "Multi", "All"])
     ap.add_argument("--out", type=Path,
-                    default=Path("/workspace1/users/josegui/runs_v7/exp4/exp1_perfold_fixed.json"))
+                    default=paths.RUNS / "exp4" / "exp1_perfold_fixed.json")
     a = ap.parse_args()
     res = {}
     for feat in a.features:

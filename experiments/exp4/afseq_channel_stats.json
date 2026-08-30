@@ -1,5 +1,5 @@
 {
- "source": "/workspace1-lascar/users/josegui/data/dataset_v7",
+ "source": "AFSEQ_DATA",
  "n_samples": 3000,
  "n_pixels": 215717434,
  "channels": [

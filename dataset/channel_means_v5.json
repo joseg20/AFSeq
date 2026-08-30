@@ -1,5 +1,5 @@
 {
- "source": "/workspace1-lascar/users/josegui/data/dataset_v5",
+ "source": "AFSEQ_DATA",
  "split": "train",
  "n_days": 3000,
  "note": "per-channel mean over TRAIN, NaN ignored; used to impute holes after normalization, which is what the 0.0 of WildfireSpreadTS means under z-score",

@@ -14,8 +14,9 @@ Five directories, one job each. Nothing imports across them except through
                   crop moves UTAE-AR from 0.429 to 0.386, so this cannot be
                   reimplemented per experiment
     experiments/  WHAT is measured: one .py per table or figure of the paper
-    benchmarks/   third-party code (WildfireSpreadTS+), kept unmodified, with
-                  every compatibility change listed in its CAMBIOS_COMPAT.md
+    benchmarks/   third-party code (WildfireSpreadTS / WildfireSpreadTS+),
+                  vendored under its own LICENSE, plus the bridges that let it
+                  read AFSeq and that let our models read theirs
 
 ## The rule the dataset code enforces
 
@@ -38,15 +39,15 @@ The code hardcodes no directory. `paths.py` reads every location from the
 environment, with defaults relative to the repository:
 
     <parent>/release_paper/        this repo
-    <parent>/data/dataset_v6/      AFSeq day rasters          AFSEQ_DATA
-    <parent>/data/dataset_v6_cache decoded copy (optional)    AFSEQ_CACHE
-    <parent>/data/wstsplus/hdf5/   WSTS+ HDF5 (exp1/4/5 only) WSTS_HDF5
+    <parent>/data/afseq/          AFSeq day rasters          AFSEQ_DATA
+    <parent>/data/afseq_cache/    decoded copy (optional)    AFSEQ_CACHE
+    <parent>/data/wstsplus/hdf5/   WSTS+ HDF5 (exp1/4/7 only) WSTS_HDF5
     <parent>/runs/                 outputs                    RUNS_DIR
 
-`WSP_DATA` moves data/ as a whole. `env/lascar.sh` is our machine's set of
-exports; write one per machine and `source` it before launching. Splits,
+`WSP_DATA` moves data/ as a whole. `env/example.sh` is the template; copy it,
+edit the four directories and `source` it before launching. Splits,
 channel means and the fusion statistics ship inside the repo (dataset/splits,
-dataset/channel_means_v5.json, experiments/exp4/afseq_channel_stats.json).
+dataset/channel_means_v7.json, experiments/exp4/afseq_channel_stats.json).
 Each event day holds `active-fire.tif` (the daily VIIRS active-fire mask, target
 and fire channel), `climate.tif` (7 bands) and `reflectance.tif` (I1, I2, M11); `dem.tif` and
 `vegetation.tif` per event. The loader turns them into 34 model channels
@@ -60,12 +61,27 @@ in `<tree>/excluded.json`; `dataset/make_splits.py` only splits what is left.
 `requirements.txt` lists the direct dependencies with the versions used here;
 torch is unpinned because its build follows the driver.
 
-To move: this repository and data/dataset_v6 (850 MB, covariates and the
-daily active-fire masks in one tree) reproduce exp2 and exp3. exp1, exp4 and exp5 also need
-the WSTS+ HDF5 (92 GB) and, for exp4's UTAE-AR/WSTS+ cell, the four
-best_AR_Veg_p4f{0-3} checkpoints (82 MB).
+To move: this repository and the AFSeq tree (~19 GB of GeoTIFF, covariates and
+the daily active-fire masks together) reproduce exp2 and exp3. exp1, exp4 and
+exp7 also need the WSTS+ HDF5 (92 GB) and, for exp4's UTAE-AR/WSTS+ cell, the
+four published best_AR_Veg_p4f{0-3} checkpoints (82 MB).
 
-## AFSeq v7: the dataset the paper uses
+## The crop: AFSEQ_CROP
+
+The loader trains and scores on a 128-px patch centred on the day-t fire. When
+the front is WIDER than the patch its bounding box can be bimodal -- two
+clusters at the ends, nothing in the middle -- and the centred patch then holds
+no fire at all: 7.1% of train, 6.5% of val and 7.9% of test samples. Those
+rollouts start from an empty feedback mask and score near zero.
+
+`AFSEQ_CROP=v8`, the default here, takes instead the patch with the most day-t
+fire, found exactly with an integral image, deterministically. It consumes the
+same two draws of `random` that the centred crop does, so every sample whose
+front FITS the patch is bit-identical between the two modes; only the wide
+fronts move. `AFSEQ_CROP=v7` restores the centred crop, which is the sampling
+the tables of the paper were produced with.
+
+## AFSeq: the dataset the paper uses
 
 Until 2026-08-25 every event's rasters covered its final contour plus 0.01
 deg: 91% of the events were smaller than the 64-px training patch (the loader

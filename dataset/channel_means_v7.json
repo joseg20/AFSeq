@@ -1,5 +1,5 @@
 {
- "source": "/workspace1-lascar/users/josegui/data/dataset_v7",
+ "source": "AFSEQ_DATA",
  "split": "train",
  "n_days": 3000,
  "seed": 0,

@@ -26,10 +26,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 import numpy as np
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import paths  # noqa: E402
 
 warnings.filterwarnings("ignore")
-GFS = Path("/workspace1/users/josegui/data/gfs")
-DATA = Path("/workspace1/users/josegui/data/dataset_v7")
+GFS = paths.DATA / "gfs"
+DATA = paths.AFSEQ
 PAD = 0.75          # grados de margen: 3 celdas GFS a cada lado
 HOURS = (24, 48, 72, 96, 120)
 
@@ -135,7 +138,7 @@ def one_event(fid: str, out_root: str):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path,
-                    default=Path("/workspace1/users/josegui/data/gfs_events"))
+                    default=paths.DATA / "gfs_events")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()

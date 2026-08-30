@@ -1,5 +1,5 @@
 # Direct dependencies of the release, versions of the environment the paper's numbers
-# were produced with (lascar, 2026-08-25, CUDA 13 build of torch). Rebuild on another
+# were produced with (2026-08-25, CUDA 13 build of torch). Rebuild on another
 # machine with the torch build that matches its driver; the rest are unpinned on purpose.
 torch   # 2.12.1 here (cu130); pick the build for your driver
 torchvision   # 0.27.1 here (cu130); pick the build for your driver

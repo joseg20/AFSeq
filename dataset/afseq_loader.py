@@ -46,6 +46,8 @@ import random
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import paths
 
 import numpy as np
 import rasterio
@@ -80,6 +82,11 @@ N_STATIC = 3 + LANDCOVER_CLASSES + 3         # terrain + land cover + NDVI/EVI/E
 # the fire pixels; a 64-px patch saw half of the day's fire. 128 is also the
 # crop WSTS/WSTS+ train and evaluate on.
 PATCH = 128
+# AFSEQ_CROP selects the crop of the 128-px patch. "v8" (the default here) takes
+# the patch with the MOST day-t fire when the front is wider than the patch;
+# "v7" always centres on the bounding box. See fire_centred_crop. The tables of
+# the paper were produced with v7, which this flag reproduces exactly.
+CROP_MODE = os.environ.get("AFSEQ_CROP", "v8")
 # Optional extra channel, NOT in CHANNELS: the hour of detection (UTC, 0-23,
 # 0 = no fire) carried as band 2 of active-fire.tif. Only the cross-benchmark
 # fusion asks for it (Seq2SeqActivePadded(with_fire_hour=True)), to fill the
@@ -100,7 +107,7 @@ CH = {name: i for i, name in enumerate(CHANNELS)}
 # la resolucion mas gruesa. La historia (X) nunca cambia: siempre es observada.
 MET_MODE = os.environ.get("AFSEQ_MET", "era")
 GFS_EVENTS = Path(os.environ.get(
-    "AFSEQ_GFS", "/workspace1/users/josegui/data/gfs_events"))
+    "AFSEQ_GFS", str(paths.DATA / "gfs_events")))
 MET_SLICE = slice(CH["lst"], CH["precipitation"] + 1)      # canales 23..29
 
 
@@ -459,14 +466,37 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     ys, xs = np.where(mask_t > 0.5)
     if len(ys) == 0:
         return random.randint(0, tH - ph), random.randint(0, tW - ph)
+    bh = int(ys.max()) - int(ys.min()) + 1
+    bw = int(xs.max()) - int(xs.min()) + 1
+    if CROP_MODE == "v8" and (bh > ph or bw > ph):
+        # v8: a front wider than the patch can be BIMODAL -- clusters at both
+        # ends of the bounding box and nothing in the middle -- and the
+        # bbox-centre then holds zero fire (7% of v7 samples, all splits;
+        # id_0065 2025-03-08 is the measured example: 121 px of fire, none in
+        # the crop). Take instead the patch with the MOST day-t fire, found
+        # exactly with an integral image. Deterministic: ties break at the
+        # first argmax, and the two RNG draws v7 makes here are consumed with
+        # zero-width jitter (a wide front leaves no jitter room in v7 either),
+        # so every sample whose front FITS the patch is bit-identical to v7.
+        m = mask_t
+        if m.shape[0] < tH or m.shape[1] < tW:
+            m = np.pad(m, ((0, tH - m.shape[0]), (0, tW - m.shape[1])))
+        ii = np.zeros((tH + 1, tW + 1), np.int64)
+        ii[1:, 1:] = np.cumsum(np.cumsum(m > 0.5, 0), 1)
+        Hh = tH - ph + 1
+        Ww = tW - ph + 1
+        S = ii[ph:ph + Hh, ph:ph + Ww] - ii[:Hh, ph:ph + Ww] \
+            - ii[ph:ph + Hh, :Ww] + ii[:Hh, :Ww]
+        k = int(np.argmax(S))
+        random.randint(0, 0)               # keep the two-draw contract of v7
+        random.randint(0, 0)
+        return k // Ww, k % Ww
     cy = (int(ys.min()) + int(ys.max())) // 2
     cx = (int(xs.min()) + int(xs.max())) // 2
     # jitter up to a quarter patch, but never so much that a fire which fits
     # in the patch is pushed out of it: the day-t front stays whole whenever
     # its bounding box is smaller than the patch (85% of the fire days at
     # 128 px). Larger fronts get whatever jitter their overhang leaves (0).
-    bh = int(ys.max()) - int(ys.min()) + 1
-    bw = int(xs.max()) - int(xs.min()) + 1
     jy = max(0, min(ph // 4, (ph - bh) // 2))
     jx = max(0, min(ph // 4, (ph - bw) // 2))
     top = cy - ph // 2 + random.randint(-jy, jy)

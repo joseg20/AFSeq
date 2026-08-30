@@ -16,12 +16,14 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import paths  # noqa: E402
 from fetch_gfs import grab, DAILY, PRECIP_HOURS          # noqa: E402
 import gfs_to_events as G                                 # noqa: E402
 
-DATA = Path("/workspace1/users/josegui/data/dataset_v7")
-GFS = Path("/workspace1/users/josegui/data/gfs")
-OUT = Path("/workspace1/users/josegui/data/gfs_events")
+DATA = paths.AFSEQ
+GFS = paths.DATA / "gfs"
+OUT = paths.DATA / "gfs_events"
 HOURS = sorted(set(DAILY) | set(PRECIP_HOURS))
 
 

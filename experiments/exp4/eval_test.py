@@ -17,7 +17,7 @@ fold, benchmark), so partial invocations while the matrix still trains are fine.
 from __future__ import annotations
 
 import argparse
-import json
+import json, os
 import statistics
 import sys
 from pathlib import Path
@@ -40,21 +40,27 @@ from exp4 import tag_of                                         # noqa: E402
 
 
 def load_res18(tag: str, out_dir: Path):
-    """Modelo res18 desde el JSON del run (original o clon de lascar).
+    """Modelo res18 desde el JSON del run (original o clon en otro disco).
 
     El JSON dice donde esta el best_ckpt; los clones lo escriben con la ruta
-    vista desde lascar (/workspace1-ranokau/...), que aqui es /workspace1/...
+    vista desde el otro nodo, que aqui cuelga de otro punto de montaje.
     Los centinelas (placeholder) no cuentan como runs hechos.
     """
     import json as _json
-    for d in (out_dir, out_dir.parent / "exp4_lascar"):
+    for d in (out_dir, out_dir.parent / "exp4_mirror"):
         js = d / f"{tag}.json"
         if not js.exists():
             continue
         meta = _json.loads(js.read_text())
         if "placeholder" in meta or not meta.get("best_ckpt"):
             continue
-        ck = meta["best_ckpt"].replace("/workspace1-ranokau/", "/workspace1/")
+        # CKPT_REWRITE="viejo=nuevo" reescribe el prefijo del checkpoint cuando
+        # el run se lanzo con otro punto de montaje.
+        ck = meta["best_ckpt"]
+        rw = os.environ.get("CKPT_REWRITE", "")
+        if "=" in rw:
+            a_, b_ = rw.split("=", 1)
+            ck = ck.replace(a_, b_)
         if not Path(ck).exists():
             continue
         sys.path.insert(0, str(ROOT / "benchmarks" / "wsts+"))

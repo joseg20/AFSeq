@@ -21,6 +21,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import paths  # noqa: E402
+
 # Una sesion por hilo: sin esto cada peticion abre un socket nuevo y con 14
 # hilos se agota el ulimit (1024) a las pocas miles de descargas -> OSError.
 _LOCAL = threading.local()
@@ -38,7 +41,7 @@ def _session():
     return s
 
 B = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-OUT = Path("/workspace1/users/josegui/data/gfs")
+OUT = paths.DATA / "gfs"
 # (shortName GRIB, nivel) -> nuestros canales lst, dew, rh, wind_*, pressure
 BASE = [("TMP", "surface"), ("DPT", "2 m above ground"), ("RH", "2 m above ground"),
         ("UGRD", "10 m above ground"), ("VGRD", "10 m above ground"),
@@ -108,7 +111,7 @@ def main():
     if a.dates:
         dates = json.loads(a.dates.read_text())
     else:
-        DATA = Path("/workspace1/users/josegui/data/dataset_v7")
+        DATA = paths.AFSEQ
         dates = sorted({p.parent.name for p in DATA.glob("id_*/*/active-fire.tif")})
     if a.limit:
         dates = dates[:a.limit]

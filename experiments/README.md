@@ -3,7 +3,7 @@
 One file per experiment. Each declares WHICH runs make up its table, knows how
 to launch them, and knows how to score them:
 
-    source env/lascar.sh               # or your machine's exports, see README
+    source env/example.sh              # your machine's exports, see README
     python experiments/expN.py --launch [--dry-run]
     python experiments/expN.py --table
 

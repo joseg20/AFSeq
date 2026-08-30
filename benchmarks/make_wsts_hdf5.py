@@ -113,7 +113,7 @@ def main():
     parser.add_argument("--data_dir", required=True,
                         help="Directorio con subcarpetas por anio (WSTSPlus/)")
     parser.add_argument("--target_dir", required=True,
-                        help="Destino de los HDF5. DEBE estar en ranokau, no en lascar.")
+                        help="Where the HDF5 files go; put them on fast local storage, not NFS.")
     parser.add_argument("--years", type=int, nargs="*", default=NEW_YEARS)
     args = parser.parse_args()
 

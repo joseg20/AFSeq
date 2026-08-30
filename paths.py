@@ -2,15 +2,15 @@
 
 Nothing else in the release hardcodes a directory. Every path here is an
 environment variable with a default RELATIVE to the repository, so the code
-runs on another machine by setting variables (see env/lascar.sh for ours),
+runs on another machine by setting variables (see env/example.sh),
 never by editing a file.
 
 Default layout the code expects next to the repository:
 
     <parent>/
       release_paper/           this repository
-      data/dataset_v7/         AFSeq: covariates AND daily active masks (AFSEQ_DATA)
-      data/dataset_v7_cache/   decoded copy, optional  (AFSEQ_CACHE)
+      data/afseq/              AFSeq: covariates AND daily active masks (AFSEQ_DATA)
+      data/afseq_cache/        decoded copy, optional  (AFSEQ_CACHE)
       data/wstsplus/hdf5/      WSTS+ HDF5, exp1/4/5    (WSTS_HDF5)
       runs/                    training outputs         (RUNS_DIR)
 
@@ -29,7 +29,7 @@ def _p(var, default):
 
 # --- data -----------------------------------------------------------------
 DATA = _p("WSP_DATA", ROOT.parent / "data")
-AFSEQ = _p("AFSEQ_DATA", DATA / "dataset_v7")
+AFSEQ = _p("AFSEQ_DATA", DATA / "afseq")
 # Decoded copy of AFSEQ (dataset/afseq_cache.py). Only used when the
 # environment variable is SET: the default is where --build writes it.
 AFSEQ_CACHE = _p("AFSEQ_CACHE", str(AFSEQ) + "_cache")
@@ -46,7 +46,8 @@ RUNS = _p("RUNS_DIR", ROOT.parent / "runs")
 RESULTS = _p("RESULTS_DIR", ROOT / "results")
 
 # --- earth engine ---------------------------------------------------------
-EE_PROJECT = os.environ.get("EE_PROJECT", "ee-joseguillen")
+# Your own Earth Engine cloud project; dataset/build_afseq.py needs it.
+EE_PROJECT = os.environ.get("EE_PROJECT", "")
 
 # --- reproducibility ------------------------------------------------------
 SEED = int(os.environ.get("SEED", 23))
