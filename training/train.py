@@ -133,6 +133,21 @@ def last_real_frame(X):
     return X[torch.arange(X.shape[0], device=X.device), last]
 
 
+# --fc-mode persist replaces the observed future covariates with a copy of the
+# day-t ones, which is what an operational system without a weather forecast
+# would have. Only t+2..t+5 can change: t+1 is produced before fut_covars is
+# read at all (models/utae_ar.py). Ablation of supp. S2.1.1.
+FC_MODE = "true"
+
+
+def apply_fc_mode(X, FC):
+    """FC as the loader gives it, or day t repeated over the horizon."""
+    if FC_MODE == "true" or FC.numel() == 0:
+        return FC
+    day_t = last_real_frame(X)[:, :FC.shape[2]]          # (B, C_cov, H, W)
+    return day_t.unsqueeze(1).expand(-1, FC.shape[1], -1, -1, -1).contiguous()
+
+
 def forward(model, name, X, FC, Y, tf_ratio):
     """One forward pass, hiding four different signatures behind one call."""
     if name in STATIC:
@@ -144,7 +159,7 @@ def forward(model, name, X, FC, Y, tf_ratio):
         b, t = X.shape[:2]
         bp = torch.arange(t, device=X.device).unsqueeze(0).repeat(b, 1)
         return model(X, batch_positions=bp)
-    return model(X, FC, y_true=Y, teacher_forcing_ratio=tf_ratio)
+    return model(X, apply_fc_mode(X, FC), y_true=Y, teacher_forcing_ratio=tf_ratio)
 
 
 def to_logits(out, name):
@@ -184,7 +199,7 @@ def val_ap(model, name, loader, dev, horizon, max_batches=0):
         if name in SINGLE_STEP:
             logit = to_logits(forward(model, name, X, FC, None, 0.0), name)[:, 0]
         else:
-            logit = model(X, FC, y_true=None, teacher_forcing_ratio=0.0)[:, 0, 0]
+            logit = model(X, apply_fc_mode(X, FC), y_true=None, teacher_forcing_ratio=0.0)[:, 0, 0]
         keep = V[:, 0] > 0.5
         if keep.any():
             ys.append((Y[keep, 0, 0] > 0.5).flatten())
@@ -208,6 +223,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--pos-weight", type=float, default=20.0)
+    ap.add_argument("--fc-mode", default="true", choices=["true", "persist"],
+                    help="future covariates: observed (true) or day-t copy")
     ap.add_argument("--patch", type=int, default=PATCH)
     ap.add_argument("--max-history", type=int, default=16)
     ap.add_argument("--seed", type=int, default=SEED)
@@ -221,8 +238,10 @@ def main():
                          "benchmarks/wstsplus_data.py, which wraps THEIR "
                          "loader; fused is the two joined per fold in the "
                          "shared Veg space, defined by experiments/exp4/")
-    ap.add_argument("--fold", type=int, default=0, choices=[0, 1, 2, 3],
-                    help="wstsplus only: which published 4-fold")
+    ap.add_argument("--fold", type=int, default=0,
+                    choices=[0, 1, 2, 3] + list(range(100, 112)), metavar="FOLD",
+                    help="wstsplus only: 0-3 = published 4-fold; "
+                         "100+i = original-WSTS 12-fold i (supp. S3.1)")
     ap.add_argument("--features", default="All", choices=["Veg", "Multi", "All"],
                     help="wstsplus only: feature set over the 40 channels")
     ap.add_argument("--history", default="fixed", choices=["fixed", "variable"],
@@ -253,6 +272,8 @@ def main():
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--tag-extra", default="")
     args = ap.parse_args()
+    global FC_MODE
+    FC_MODE = args.fc_mode
 
     out = args.out or (RUNS / "release_training")
     out.mkdir(parents=True, exist_ok=True)

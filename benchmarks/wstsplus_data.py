@@ -95,6 +95,22 @@ FOLDS4 = [
 ]
 
 
+# The ORIGINAL WSTS protocol: 12 folds over the four years 2018-2021. Each
+# fold holds one year out for test and one of the remaining three for val,
+# training on the other two -- 4 x 3 = 12. This is the table of the original
+# WildfireSpreadTS paper, and the one supp. S3.1 reports UTAE-AR on. Folds are
+# addressed as 100 + i so the 4-fold path stays byte-identical.
+WSTS_YEARS = (2018, 2019, 2020, 2021)
+FOLDS12 = [(te, va) for te in WSTS_YEARS for va in WSTS_YEARS if va != te]
+
+
+def split12_years(fold_id: int):
+    """(train, val, test) year lists for an original-WSTS 12-fold."""
+    te, va = FOLDS12[fold_id]
+    tr = [y for y in WSTS_YEARS if y not in (te, va)]
+    return tr, [va], [te]
+
+
 def split4_years(fold_id: int):
     """(train, val, test) year lists for a published WSTS+ 4-fold."""
     f = FOLDS4[fold_id]
@@ -153,7 +169,8 @@ def make_dataset(fold: int, part: str, data_dir: str, features: str = "All",
         """Their dataset, re-windowed into our seq2seq 5-tuple."""
 
         def __init__(self):
-            tr_y, va_y, te_y = split4_years(fold)
+            tr_y, va_y, te_y = (split12_years(fold - 100) if fold >= 100
+                                else split4_years(fold))
             years = {"train": tr_y, "val": va_y, "test": te_y}[part]
             train_flag = (part == "train") if is_train is None else is_train
             super().__init__(

@@ -90,6 +90,94 @@ LANDCOVER = slice(3, 3 + LANDCOVER_CLASSES)
 CH = {name: i for i, name in enumerate(CHANNELS)}
 
 
+
+# ---------------------------------------------------------------- contrato GFS
+# AFSEQ_MET elige de donde salen los siete canales meteorologicos de las
+# covariables FUTURAS (fut_covars). "era" es lo que se ha usado siempre:
+# reanalisis observado del dia t+k, un techo que en operacion no existe.
+# "gfs_fcst" usa el pronostico emitido el dia t (f024..f120) y "gfs_anl" el
+# analisis GFS del propio dia, que aisla el error de pronostico del efecto de
+# la resolucion mas gruesa. La historia (X) nunca cambia: siempre es observada.
+MET_MODE = os.environ.get("AFSEQ_MET", "era")
+GFS_EVENTS = Path(os.environ.get(
+    "AFSEQ_GFS", "/workspace1/users/josegui/data/gfs_events"))
+MET_SLICE = slice(CH["lst"], CH["precipitation"] + 1)      # canales 23..29
+
+
+
+_EVENT_TRANSFORM = {}
+
+
+def event_transform(iddir, date):
+    """Transform del raster del evento, leido del GeoTIFF de disco.
+
+    No usa load_raster a proposito: con AFSEQ_CACHE instalada esa funcion sirve
+    .npy de la cache y devuelve None como transform.
+    """
+    fid = Path(iddir).name
+    tr = _EVENT_TRANSFORM.get(fid)
+    if tr is None:
+        with rasterio.open(Path(iddir) / date / "active-fire.tif") as src:
+            tr = src.transform
+        _EVENT_TRANSFORM[fid] = tr
+    return tr
+
+
+def _gfs_regrid(arr, bbox, transform, top, left, ph):
+    """De la malla GFS de 0.25 grados a la rejilla del crop, bilineal.
+
+    arr: (..., h, w) en la malla nativa; bbox: (lon0, lat0, lon1, lat1) del
+    recorte, con latitudes DECRECIENTES como las sirve GFS.
+    """
+    lon0, lat0, lon1, lat1 = bbox
+    h, w = arr.shape[-2:]
+    # centros de celda del crop, en coordenadas del raster del evento
+    cols = left + np.arange(ph) + 0.5
+    rows = top + np.arange(ph) + 0.5
+    lon = transform.c + transform.a * cols
+    lat = transform.f + transform.e * rows
+    # posicion fraccionaria dentro de la malla GFS
+    gx = (lon - lon0) / max(lon1 - lon0, 1e-9) * (w - 1)
+    gy = (lat1 - lat) / max(lat1 - lat0, 1e-9) * (h - 1)
+    gx = np.clip(gx, 0, w - 1); gy = np.clip(gy, 0, h - 1)
+    x0 = np.floor(gx).astype(int); y0 = np.floor(gy).astype(int)
+    x1 = np.minimum(x0 + 1, w - 1); y1 = np.minimum(y0 + 1, h - 1)
+    fx = (gx - x0)[None, :]; fy = (gy - y0)[:, None]
+    a = arr[..., y0[:, None], x0[None, :]]
+    b = arr[..., y0[:, None], x1[None, :]]
+    c = arr[..., y1[:, None], x0[None, :]]
+    d = arr[..., y1[:, None], x1[None, :]]
+    return ((a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy)
+
+
+def gfs_future_met(fid, day_t, transform, top, left, ph, horizon):
+    """(horizon, 7, ph, ph) con los canales meteorologicos del contrato GFS,
+    o None si ese dia no tiene pronostico descargado."""
+    f = GFS_EVENTS / fid / day_t / "gfs.npz"
+    if not f.exists():
+        return None
+    try:
+        z = np.load(f)
+        bbox = z["bbox"]
+        src = z["fcst"] if MET_MODE == "gfs_fcst" else None
+        if MET_MODE == "gfs_anl":
+            an = z["anl"]
+            if an.size == 0:
+                return None
+            src = np.repeat(an[None], len(z["fcst"]), axis=0)
+        if src is None:
+            return None
+        out = _gfs_regrid(src.astype(np.float32), bbox, transform, top, left, ph)
+        if out.shape[0] < horizon:
+            out = np.concatenate([out, np.repeat(out[-1:], horizon - out.shape[0], 0)])
+        return out[:horizon]
+    except Exception as exc:
+        if os.environ.get("AFSEQ_MET_STRICT"):
+            raise
+        print(f"[gfs] {fid}/{day_t}: {type(exc).__name__} {exc}", file=sys.stderr)
+        return None
+
+
 def _add(d, n):
     return (datetime.strptime(d, "%Y-%m-%d") + timedelta(days=n)).strftime("%Y-%m-%d")
 
@@ -256,6 +344,11 @@ def normalize_climate(climate):
     precp = np.clip(precp / max_precp, 0, 1)
 
     return np.stack([temp, dew, rh, ws, wdir, pres, precp])
+
+
+def normalize_climate_stack(g):
+    """normalize_climate aplicado a (T, 7, H, W)."""
+    return np.stack([normalize_climate(g[i]) for i in range(g.shape[0])])
 
 
 def impute_missing(X):
@@ -488,6 +581,15 @@ class Seq2SeqActivePadded(Dataset):
                 else:
                     fut.append(np.zeros((N_COVARIATES, ph, ph), dtype=np.float32))
             fut_covars = np.stack(fut).astype(np.float32) if H > 1 else np.zeros((0, N_COVARIATES, ph, ph), np.float32)
+
+            # contrato de covariables futuras: sustituir la meteorologia
+            # observada por la del pronostico GFS emitido el dia t
+            if MET_MODE != "era" and fut_covars.shape[0] > 0:
+                _tr = event_transform(iddir, last_date)
+                _g = gfs_future_met(fid, last_date, _tr, top, left, ph,
+                                    fut_covars.shape[0])
+                if _g is not None:
+                    fut_covars[:, MET_SLICE] = normalize_climate_stack(_g)
 
             # targets + valid_mask
             Ys, valid = [], np.zeros(H, dtype=np.float32)
