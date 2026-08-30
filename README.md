@@ -18,6 +18,13 @@ Five directories, one job each. Nothing imports across them except through
                   vendored under its own LICENSE, plus the bridges that let it
                   read AFSeq and that let our models read theirs
 
+## Licence
+
+This repository is CC BY 4.0 (`LICENSE`). The one exception is
+`benchmarks/wsts+/`, a vendored copy of WildfireSpreadTS that keeps its own MIT
+licence in `benchmarks/wsts+/LICENSE`; `benchmarks/wsts+/UPSTREAM.txt` records
+the vendored commit and the reversible compatibility patches applied to it.
+
 ## The rule the dataset code enforces
 
 A missing measurement is written as NaN and recorded in `provenance.json`; it
