@@ -2,7 +2,7 @@
 
 Why: accumulating every prediction and calling sklearn's average_precision_score
 once at the end sorts ~80 million values on the CPU. That is what pinned 16
-cores while the GPU sat at 4%. Sorting is exactly what a GPU is for.
+cores while the GPU sat idle. Sorting is exactly what a GPU is for.
 
 The subtlety is TIES. sklearn groups equal scores into a single threshold, so
 all predictions with the same value share one precision/recall point. With
@@ -52,17 +52,17 @@ def pooled_ap_gpu(y, s, device="cuda"):
 def _test():
     """Compare against sklearn on data shaped like ours: float16, very sparse."""
     rng = np.random.default_rng(23)
-    print("%-34s %10s %10s %12s" % ("caso", "sklearn", "gpu", "diferencia"))
+    print("%-34s %10s %10s %12s" % ("case", "sklearn", "gpu", "difference"))
     print("-" * 70)
     worst = 0.0
     for name, n, pos_rate, dtype in (
-            ("pequeno float32", 100_000, 0.02, np.float32),
-            ("float16 (muchos empates)", 1_000_000, 0.01, np.float16),
-            ("muy escaso, como WSTS+", 5_000_000, 0.003, np.float16),
-            ("saturado en 0 y 1", 1_000_000, 0.01, np.float16)):
+            ("small, float32", 100_000, 0.02, np.float32),
+            ("float16, many ties", 1_000_000, 0.01, np.float16),
+            ("very sparse, like WSTS+", 5_000_000, 0.003, np.float16),
+            ("saturated at 0 and 1", 1_000_000, 0.01, np.float16)):
         y = (rng.random(n) < pos_rate).astype(np.int8)
         s = rng.random(n).astype(dtype)
-        if name.startswith("saturado"):
+        if name.startswith("saturated"):
             s = np.clip(s * 3 - 1, 0, 1).astype(dtype)   # lots of exact 0 and 1
         s = np.where(y == 1, np.minimum(
             s.astype(np.float32) + 0.3, 1.0).astype(dtype), s)
@@ -71,8 +71,8 @@ def _test():
         worst = max(worst, abs(a - b))
         print("%-34s %10.6f %10.6f %12.2e" % (name, a, b, abs(a - b)))
     print()
-    print("  peor diferencia: %.2e" % worst)
-    print("  veredicto:", "EQUIVALENTE" if worst < 1e-6 else
+    print("  worst difference: %.2e" % worst)
+    print("  verdict:", "EQUIVALENT" if worst < 1e-6 else
           "DIFFERS, do not use without checking")
     return worst < 1e-6
 

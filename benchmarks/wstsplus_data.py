@@ -19,7 +19,7 @@ HISTORY  "fixed" (default 5) or "variable"
     Their protocol is fixed: every sample carries exactly n_leading_observations
     days, and `datapoints_in_fire = n_imgs - n_leading_observations` silently
     drops the opening days of every fire. Measured on fold 0's training years,
-    lead=5 keeps 10,408 of the 12,644 windows a lead of 1 would allow: 82.3%.
+    lead=5 keeps most of the windows a lead of one day would allow.
     No fire is lost, since WSTS+ fires are long (min 9 days, median 21), but
     the
     first five days of each one never appear.
@@ -39,7 +39,7 @@ REQUIRE_FIRE_ON_T  False by default here
 
     AFSeq's sampler only emits windows with active fire on day t. Applied to
     WSTS that discards ignition (nothing at t, fire at t+1), extinction and
-    empty windows, about 31% of their test set. Their own benchmark keeps
+    empty windows, a large part of their test set. Their own benchmark keeps
     them, so the default here is False: train and score on everything. Set it
     True only to match an AFSeq-style protocol, and say so.
 
@@ -50,7 +50,7 @@ from __future__ import annotations
 import json
 import os
 # HDF5 file locking over NFS hangs or serialises the workers (each one opens
-# the same files): 8 workers at 5% CPU, GPU at 0%, no bytes read, measured on
+# the same files): the workers idle, the GPU idles, no bytes are read, measured on
 # an NFS-backed cluster. Local disks never showed it. Off here, in
 # the loader, so every entry point (train.py, the experiments, the tests) gets it.
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")

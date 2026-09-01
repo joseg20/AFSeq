@@ -33,7 +33,7 @@ is that file, and nothing else:
     part of a state_dict and that default says nothing about training. Their
     paper settles it: "we included both pre-training and focal loss in all our
     models", with an ablation (their Tab. 1) where removing focal loss costs
-    24% AP.
+    a fraction of the AP it should.
 
     On alpha: their paper says alpha is the inverse frequency of positive
     pixels, but the code passes `1 - pos_class_weight`, which is negative, and

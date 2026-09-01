@@ -37,18 +37,17 @@ THE SCORING PROTOCOL, stated once and applied to every row
 PADDING. Every model here must be invariant to appended pad frames: AFSeq
 histories are variable and the collate pads at the END. Four of five were not,
 and their rows measured something other than what they claimed. U-Net and
-ConvNeXt read X[:, -1] as "day t" when it was an all-zero frame 68% of the
+ConvNeXt read X[:, -1] as "day t" when it was an all-zero frame for most of the
 time; ConvLSTM returned the cell state after the padded steps; UTAE and UTAE-AR
 pooled padded steps into the LTAE's GroupNorm statistics. All are fixed, and
 `pad_invariance` re-checks each model as it is scored so the failure cannot
 come back silently.
 
 PERSISTENCE is computed here too, from the same loader and the same filter, so
-the floor of the table is measured rather than quoted: 0.124 +- 0.013 on the
-shipped splits (1,194 events, 128-px patches; dataset/curate.py says which 33 duplicates and 74 US
-fires the build leaves out, and why). With every event on the old contour
-windows it was 0.252, and the 0.198
-of an earlier draft was a test set that no longer exists. What this prints is
+the floor of the table is measured rather than quoted, on the shipped splits and
+the same patches (dataset/curate.py says which duplicates and which US fires the
+build leaves out, and why). It is far lower than what the same baseline scored
+when every event still sat on a window cut to its contour. What this prints is
 the one that belongs next to the model rows it prints, which is the only
 comparison the table actually makes.
 """

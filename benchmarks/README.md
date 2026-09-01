@@ -30,8 +30,8 @@ Their code already supports both designs; we only pass the flag:
     (default, false)               12 folds over WSTS only (2018-2021), with 2
                                    train / 1 val / 1 test
 
-The released HuggingFace weights (`Res18UTAE_T5/Veg`, fold0..fold11, mean AP
-0.478) are the **12-fold, WSTS-only** design. They cannot be used for the
+The released HuggingFace weights (`Res18UTAE_T5/Veg`, fold0..fold11) are the
+**12-fold, WSTS-only** design. They cannot be used for the
 4-fold WSTS+ column of our tables: different training years, different test
 sets.
 
@@ -46,8 +46,8 @@ what ships, and no grid search of ours is involved:
 
 `alpha_focal` is commented out, so their default applies: `BaseModel.py`
 normalizes `pos_class_weight` and then passes `alpha = 1 - weight`, which makes
-alpha 0.0042 instead of 0.9958. In torchvision alpha weights the POSITIVE
-class, so their Focal penalizes a fire mistake ~236x less than a background
+alpha into its complement. In torchvision alpha weights the POSITIVE class, so
+their Focal penalizes a fire mistake far less than a background
 one, the opposite of what their paper describes. We do not correct it: their
 published numbers come from this code, and the question these tables ask is how
 *their* model transfers, not how a fixed version would.
@@ -55,13 +55,14 @@ published numbers come from this code, and the question these tables ask is how
 ## Getting WSTS+ (only the WSTS+ and cross-benchmark experiments need it)
 
 1. `benchmarks/download_wstsplus.sh <dir>` downloads Zenodo record 17584629,
-   WSTSPlus.zip, 19.9 GB, md5 42da7598cc33a170064e78d8027148c9. Resumable by
+   WSTSPlus.zip, md5 42da7598cc33a170064e78d8027148c9. Resumable by
    an external loop on purpose: `curl --retry` together with `-C -` truncates
-   the file and restarts from zero (that is how 6 GiB were lost once).
+   the file and restarts from zero, which is how a whole partial download was
+   lost once.
 2. `unzip` it; the tree is `<year>/<fire>/*.tif`, 23 bands, no CRS.
 3. `benchmarks/make_wsts_hdf5.py --data_dir <unzipped> --target_dir $WSTS_HDF5
    --years 2016 2017 2018 2019 2020 2021 2022 2023`, which is their
    CreateHDF5Dataset.py with the years unpinned and two fixes (no CRS, no torch
-   import); 92 GB, `<year>/<fire>.hdf5` with a `data` dataset of
+   import); `<year>/<fire>.hdf5` with a `data` dataset of
    (days, 23, H, W). `wstsplus_data.py` reads exactly that.
 

@@ -11,9 +11,9 @@ fused Veg-space dataset defined by cross/fusion.py, and runs their Trainer.
 THE MODELS, and where each configuration comes from:
 
   utae_res18   SMPTempModel: smp-Unet(resnet18, imagenet) + LTAE on the last
-               encoder stage. Their best model overall (0.478 AP on WSTS).
+               encoder stage. Their best model overall on WSTS.
   res50_unet   SMPModel with a resnet50 encoder, cfgs/unet/res50_monotemporal
-               .yaml. Their second-best single-frame model (0.457 vs 0.455).
+               .yaml. Their second-best single-frame model, by a hair.
 
   Both take their configuration from cfgs/unet/res18_monotemporal.yaml, which
   is what EVERY published sweep of theirs passes: focal loss, AdamW at 1e-3,

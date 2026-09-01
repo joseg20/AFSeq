@@ -11,8 +11,9 @@ produce bit-identical outputs to that package, see dev/ for the check.
 
 INPUT CONTRACT. `fut_covars` supplies the 16 covariate channels of each rollout
 step. What you put there is a protocol decision, not a detail: covariates
-observed after day t are an unreachable ceiling worth +0.050 AP at t+5 over
-freezing them at day t. See evaluation/ for the four supported modes
+observed after day t are an unreachable ceiling, worth a large margin at the far
+end of the horizon over freezing them at day t. See evaluation/ for the four
+supported modes
 (observed / persist / gfs_fcst / gfs_anl).
 
 From utae_ar/__init__.py
@@ -726,8 +727,8 @@ class UTAE_AR(nn.Module):
         # 3. pick the frame the rollout starts from
         # Histories are right-padded to the longest one in the batch, so
         # x_hist[:, -1] is an all-zero frame for most samples: measured on the
-        # test set, 62% at the evaluation batch size of 4 and 73% at batch size
-        # 8 (0% at batch size 1: it is a property of the batch, not of the
+        # test set, and the share grows with the evaluation batch size and
+        # vanishes at batch size one: it is a property of the batch, not of the
         # sample).  The rollout must start from the last REAL observed day.
         last_real = ((~pad_mask).long().sum(dim=1) - 1).clamp(min=0)          # (B,)
         prev_frame = x_hist[torch.arange(b, device=device), last_real]        # (B,17,H,W)

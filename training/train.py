@@ -29,7 +29,8 @@ same order of operations, same result bit for bit.
                                 epoch. Accumulated in a device tensor and read
                                 once per epoch instead.
   validation AP on the GPU      pooled AP sorted 80M values on the CPU, pinning
-                                16 cores while the GPU idled at 4%. Same
+                                every core it could take while the GPU idled.
+                                Same
                                 definition, measured 97x faster (21.4s -> 0.2s).
   no per-sample .cpu()          validation used to copy every prediction to
                                 host memory one sample at a time. Kept on
@@ -117,12 +118,12 @@ def last_real_frame(X):
 
     `collate_padded` pads short histories with zero frames at the END of the
     sequence, so `X[:, -1]` is the day-t frame only for the samples that happen
-    to be the longest in their batch. Measured on splits_v4_s23, 68% of test
+    to be the longest in their batch. Measured on our splits, most test
     samples get an all-zero image that way, and the static models were being
     scored on a blank input two times out of three.
 
     AFSeq histories are variable by construction (`seq_dates = dates[max(0,
-    idx-15) : idx+1]`), so this is not an edge case: 80% of training samples
+    idx-15) : idx+1]`), so this is not an edge case: most training samples
     have fewer than the 16-day maximum.
     """
     # same criterion as with_vegfolds/cross_table.py:last_real_frame, which

@@ -143,7 +143,8 @@ def masked_group_norm(gn, x, valid):
     variance over the TEMPORAL axis as well as the channel one. With
     variable-length histories, the zero frames the collate appends are pooled in
     as if they were observations, and the statistics drift with the amount of
-    padding, measured at up to 7.7% of the output scale for 12 padded steps,
+    padding, measured at a few percent of the output scale once several steps
+    are padded,
     growing monotonically with the padding. The attention mask downstream cannot
     undo it, because the leak happens before the attention.
 

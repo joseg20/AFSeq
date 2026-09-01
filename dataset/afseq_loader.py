@@ -3,7 +3,7 @@
     from dataset.afseq_loader import (Seq2SeqActivePadded, collate_padded,
                                       load_ids, dl_ids)
 
-Ported VERBATIM on 2026-08-25 from the research tree (model/experiments_v2/
+Ported VERBATIM from the research tree (model/experiments_v2/
 dataset_active_padded.py, model/utils/utils.py:get_features and the functions
 it calls, with_wstsplus/train_afseq_proto.py:load_ids/dl_ids), so that the
 release stands alone; nothing in it imports that tree any more. Equality with
@@ -31,7 +31,7 @@ every band min-max normalised into [0, 1] with the fixed
 ranges below. A hole is NaN on disk (dataset/build_afseq.py never writes a
 plausible constant) and is imputed here with the channel's TRAIN mean
 (dataset/channel_means.json): 0 would be the bottom of every range. The
-normalised zero of reflectance is 0.006211, not 0.
+normalised zero of reflectance is not 0.
 
 If AFSEQ_CACHE is set, dataset/afseq_cache.py swaps `get_features` and
 `load_raster` in this module for lookups into a decoded copy: 26-34x faster,
@@ -63,7 +63,7 @@ from paths import CHANNEL_MEANS  # noqa: E402
 # THE CHANNEL LAYOUT, the one place it is defined. Everything that needs a
 # count or an index imports it from here (train.py, afseq_datamodule.py,
 # experiments/afseq.py, experiments/cross/channels.py). 34 channels:
-# land cover went from one ordinal scalar to 17 one-hot classes (it is a
+# land cover went from one ordinal scalar to one-hot classes (it is a
 # category, and that is how WSTS encodes it) and VNP09GA M11 joined I1/I2
 # (the one Veg channel of WSTS+ that AFSeq lacked).
 LANDCOVER_CLASSES = 17                       # MCD12Q1 IGBP classes 1..17
@@ -76,11 +76,11 @@ N_CHANNELS = len(CHANNELS)                   # 34
 FIRE_CHANNEL = CHANNELS.index("fire")        # 33, always last
 N_COVARIATES = N_CHANNELS - 1                # what fut_covars carries
 N_STATIC = 3 + LANDCOVER_CLASSES + 3         # terrain + land cover + NDVI/EVI/ET: constant per event
-# THE PATCH: what the model sees per sample, in pixels of the 200 m grid
-# (128 px = 25.6 km). With windows cut to the contour, 48% of the
-# fire days have a day-t front larger than 64 px and those days hold 81% of
-# the fire pixels; a 64-px patch saw half of the day's fire. 128 is also the
-# crop WSTS/WSTS+ train and evaluate on.
+# THE PATCH: what the model sees per sample, in pixels of the fire grid. With
+# windows cut to the contour, a large share of the fire days had a day-t front
+# wider than the patch used before, and those were the days holding most of the
+# fire pixels, so that patch saw only part of the day's fire. The value below is
+# also the crop WSTS and WSTS+ train and evaluate on.
 PATCH = 128
 # AFSEQ_CROP picks how the 128-px patch is placed. "maxfire", the default,
 # takes the patch holding the most day-t fire whenever the front is wider than
@@ -473,9 +473,9 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     if CROP_MODE == "maxfire" and (bh > ph or bw > ph):
         # A front wider than the patch can be bimodal, with clusters at both
         # ends of the bounding box and nothing in the middle, and the centre of
-        # that box then holds zero fire. It happens in 7% of the samples across
-        # all splits; id_0065 2025-03-08 is the measured example, 121 px of fire
-        # on the raster and none in the crop. Take instead the patch with the
+        # that box then holds zero fire. It happens in a small but far from
+        # negligible share of the samples of every split. Take instead the patch
+        # with the
         # most day-t fire, found exactly with an integral image. Deterministic:
         # ties break at the first argmax, and the two RNG draws the centred crop
         # makes here are consumed with zero-width jitter (a wide front leaves no
@@ -498,8 +498,8 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     cx = (int(xs.min()) + int(xs.max())) // 2
     # jitter up to a quarter patch, but never so much that a fire which fits
     # in the patch is pushed out of it: the day-t front stays whole whenever
-    # its bounding box is smaller than the patch (85% of the fire days at
-    # 128 px). Larger fronts get whatever jitter their overhang leaves (0).
+    # its bounding box is smaller than the patch, which is most of the fire
+    # days. Larger fronts get whatever jitter their overhang leaves.
     jy = max(0, min(ph // 4, (ph - bh) // 2))
     jx = max(0, min(ph // 4, (ph - bw) // 2))
     top = cy - ph // 2 + random.randint(-jy, jy)
@@ -513,7 +513,8 @@ class Seq2SeqActivePadded(Dataset):
         # require_fire_on_t=True is AFSeq's protocol and the default, so every
         # existing experiment is untouched. False also emits the windows WSTS
         # emits and we never do: ignition (nothing at t, fire at t+1),
-        # extinction and empty, which are 30.9% of their test and 0% of ours.
+        # extinction and empty, which are a large share of their test set and
+        # none of ours.
         self.DATASET = Path(DATASET)
         self.with_fire_hour = with_fire_hour
         self.ph = patch_size; self.max_seq_len = max_seq_len; self.H = horizon

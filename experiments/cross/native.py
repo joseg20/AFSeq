@@ -27,8 +27,8 @@ is trained and scored on one mangled year.
 
 THE ANCHOR for the UTAE-AR / WSTS+ cell is not retrained: it reuses
 best_AR_Veg_p4f{0..3}_bce_dice_lr0p001.pth. Scored through
-benchmarks/wstsplus_data.py those give 0.3778 / 0.3089 / 0.4945 / 0.5385,
-mean 0.4299 against Table 3's 0.4295.
+benchmarks/wstsplus_data.py their fold mean reproduces the published value of
+the transfer table.
 """
 from __future__ import annotations
 

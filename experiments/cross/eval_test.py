@@ -156,7 +156,7 @@ def main():
                     continue
                 if source == "wsts_anchor":
                     # published anchor checkpoints (trained on WSTS+ Veg, the
-                    # ones behind the 0.4299 reproduction of wstsplus.py), scored cross
+                    # ones behind the reproduction in wstsplus.py), scored cross
                     ck = (Path(a.anchor_dir)
                           / f"best_AR_Veg_p4f{fold}_bce_dice_lr0p001.pth")
                     tag = ck.stem

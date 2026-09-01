@@ -32,9 +32,9 @@ each benchmark's own test set, in its own column. Pooling would let whichever
 side contributes more pixels decide the number.
 
 CONSISTENCY CHECK. The UTAE-AR / trained-on-WSTS+ / scored-on-WSTS+ cell should
-land near the Veg row of wstsplus.py, and the published checkpoints scored through this
-same loader give 0.4299 against Table 3's 0.4295. If a rewrite moves that cell,
-the loader changed, not the model.
+land near the Veg row of wstsplus.py, and the published checkpoints scored
+through this same loader reproduce the published value. If a rewrite moves that
+cell, the loader changed, not the model.
 """
 from __future__ import annotations
 

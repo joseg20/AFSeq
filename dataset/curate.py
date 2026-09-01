@@ -5,31 +5,30 @@
 
 Runs last in `build_afseq.py --phase all`, so the tree the download produces
 is already the dataset the paper uses; `dataset/make_splits.py` only splits
-what is left. Two rules, both decided on 2026-08-25 with the numbers below:
+what is left. Two rules, both decided from the measurements described below:
 
 1. DUPLICATED EVENTS. Two ids with the same footprint, raster shape and the
-   exact list of mask dates are the same fire twice (the expansion campaign
-   re-downloaded events that already existed: 33 pairs, 25 of
-   them with a byte-identical climate.tif). The lower id stays. Left in, they
-   land on different sides of a split: 14-18 of the 33 pairs did, i.e. the
-   same fire in train and test.
+   exact list of mask dates are the same fire twice: the expansion campaign
+   re-downloaded events that already existed, and most of those pairs even have
+   a byte-identical climate.tif. The lower id stays. Left in, they land on
+   different sides of a split, which puts the same fire in train and test.
 
-2. THE MOST PERSISTENT US FIRES. AFSeq's pooled persistence AP (0.252 with
-   everything) is not a property of the target: it is a handful of slow US
-   fronts, 6-30 days long, whose day-to-day masks overlap 0.55-0.80. Per
-   region the floor was US 0.307 against Chile 0.174 and S.Europe 0.170.
-   Removing the 15% most persistent US events (74) puts the three regions at
-   the same floor (0.168 / 0.173 / 0.156) and the dataset at 0.167, the level
-   of WSTS+ under the same sampler (0.200). Chile and S.Europe are untouched.
-   Persistence is ranked by the Jaccard of consecutive daily masks counted in
-   128-px crops centred on the day-t fire with jitter, four per day, the way
-   the loader samples; the count
-   is deterministic (days sorted, one RNG per event seeded by its id).
+2. THE MOST PERSISTENT US FIRES. AFSeq's pooled persistence AP, with
+   everything in, is not a property of the target: it is a handful of slow US
+   fronts, weeks long, whose day-to-day masks barely move. Measured per region,
+   the persistence floor of the US was far above that of Chile and S.Europe.
+   Dropping the most persistent US events puts the three regions on the same
+   floor and the dataset near the level of WSTS+ under the same sampler. Chile
+   and S.Europe are untouched. Persistence is ranked by the Jaccard of
+   consecutive daily masks, counted in crops centred on the day-t fire with
+   jitter, several per day, the way the loader samples; the count is
+   deterministic (days sorted, one RNG per event seeded by its id).
 
 Nothing is deleted: excluded events move to `<tree>_excluded/<reason>/<id>`,
 and `<tree>/excluded.json` records every id with its reason and the
 parameters. A tree that already has excluded.json is left alone (the rules
-are not idempotent: a second pass would take 15% of what is left) unless
+are not idempotent: a second pass would take that same fraction again of what
+   is left) unless
 `--force`. `--dry-run` only prints the lists. Masks are read from
 `<tree>/<id>/<date>/active-fire.tif`, the product build_afseq.py writes.
 """

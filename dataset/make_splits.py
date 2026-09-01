@@ -5,7 +5,7 @@
 
 Splits whatever the dataset tree contains. What is NOT in the tree is decided
 upstream by `build_afseq.py --phase curate` (dataset/curate.py): duplicated
-events and the 15% most persistent US fires leave the dataset there, not
+events and the most persistent US fires leave the dataset there, not
 here, so the download produces the dataset the paper uses and this file only
 distributes it: 70 / 15 / 15 per region (Chile, US, S.Europe), one RNG per
 seed, ids sorted before shuffling so the files are reproducible.
@@ -15,7 +15,7 @@ of the same region until the test's estimated persistence AP sits in the
 window, keeping every region's share of fires, sampled days and burned pixels
 within `--tol`. It exists for benchmark studies (what if the test floor were
 X?) and is not what produced the shipped splits. Persistence of the shipped
-splits, measured with afseq.py --table --rows persistence: 0.124 +- 0.013.
+splits, measured with afseq.py --table --rows persistence.
 
 `--holdout REGION [REGION ...]` writes leave-one-region-out splits instead
 (leave-one-region-out): Test = EVERY event of that region, Train/Val = the other

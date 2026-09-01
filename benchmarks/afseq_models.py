@@ -7,8 +7,8 @@ THE CHANGE: pad_mask through the temporal attention
 
     WSTS hands every model exactly `n_leading_observations` days, so a padded
     frame never exists and their `SMPTempModel.forward` has no reason to mask
-    one. AFSeq fires have variable-length histories: 80% of training samples
-    and 76% of test samples carry fewer than the 16-day maximum, and the AFSeq
+    one. AFSeq fires have variable-length histories: most training and test
+    samples carry fewer days than the maximum, and the AFSeq
     collate pads them with zero frames at the END of the sequence.
 
     Run their forward unchanged on that, and the LTAE attends over zero frames

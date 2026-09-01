@@ -13,8 +13,9 @@ WHY IT LOOKS LIKE THIS. The constraints are the cluster's, not PyTorch's:
   few lanes      What runs out first is CPU. We were twice asked to use
                  fewer cores, so LANES is small on purpose and each job
                  gets OMP_NUM_THREADS=2. Without AFSEQ_CACHE the AFSeq loader
-                 spends 89% of its time decoding .tif in rasterio (not disk:
-                 iowait 0, dataset in page cache) and an A100 sits at 0-40%
+                 spends nearly all of its time decoding .tif in rasterio (not
+                 disk: iowait is zero and the dataset is in page cache) while
+                 the GPU sits mostly idle
                  under 3-4 trainings; with it the GPU saturates at 2 lanes.
                  See dataset/afseq_cache.py.
   resumable      A job writes a marker only when it exits 0, and the runner

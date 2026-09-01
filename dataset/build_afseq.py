@@ -23,8 +23,9 @@ THE RULE THIS PIPELINE EXISTS TO ENFORCE: never write a plausible constant for
 missing data. The previous version answered an empty collection with
 constant([0,0]) for reflectance and constant(273.15), that is 0 C, for LST,
 and both
-are indistinguishable from a measurement once written. That silently killed 83%
-of the reflectance and 34% of the LST without a single error message. Here a
+are indistinguishable from a measurement once written. That silently killed
+most of the reflectance and a third of the LST without a single error message.
+Here a
 hole is written as NaN and recorded in provenance.json, and the loader imputes
 it with the channel mean (see model/utils/utils.py:impute_missing).
 
@@ -36,7 +37,7 @@ SOURCES, and why each one:
             ~10:30). Measured: Aqua runs +10.1 C warmer than Terra, so the two
             cannot be mixed in one channel; and 13:30 is closer to the hour a
             fire makes its run, with more thermal contrast between burn scar
-            and live fuel. Coverage is 68% vs Terra's 70%, a rounding error.
+            and live fuel. Its coverage matches Terra's to a rounding error.
   LST hole  ERA5-Land skin_temperature sampled at 13:30 LOCAL (UTC derived from
             longitude). Measured error against real Aqua LST: 4.0 C at 13:30
             versus 11.2 C as a daily mean and 9.06 C for imputing the global
@@ -186,7 +187,7 @@ def fetch_fire(region, date, out_path, ref_path=None):
     """The DAILY ACTIVE-FIRE mask: VIIRS detections of that one day only.
 
     SNPP and NOAA-20 together: same instrument, same 375 m, two looks per day
-    instead of one (recovers 11.5% of the gaps that a single satellite enters
+    instead of one (recovers part of the gaps that a single satellite enters
     as "no fire" when it means "not observed"). This is the target and the
     fire channel of every model; there is no cumulative product any more.
     Pixels with no detection are 0, never NaN: absence of fire is a value.
@@ -324,7 +325,7 @@ def fetch_climate(region, date, out_path, ref_path, event_id):
     # again: 0 C, 0 m/s, 0 hPa. Any band that is a flat zero is declared NaN.
     # ONLY when the WHOLE raster is empty. A single flat-zero band is usually
     # legitimate: precipitation is exactly 0 on a dry day, and CHIRPS is daily
-    # and global, so that zero is a measurement (76% of fire-days are dry).
+    # and global, so that zero is a measurement (most fire-days are dry).
     # Declaring those NaN would turn "it did not rain" into "unknown", which is
     # the opposite mistake to the one this pipeline was written to fix.
     todas_vacias = all(np.all(np.abs(np.nan_to_num(arr[b])) < 1e-9)
@@ -451,8 +452,8 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
             # at 30 m in UTM, where they mean something, then block-averaged
             # onto the event's grid: that average is all the loader ever used
             # (downsample_average), and keeping the 30 m raster made the DEM
-            # 80% of the dataset (13 GB of 16 at 128-px windows, ~50 GB at
-            # 256). Same numbers, a fraction of the bytes.
+            # most of the dataset on its own. Same numbers, a fraction of the
+            # bytes.
             with rasterio.open(ref) as r_:
                 prof = r_.profile.copy(); shape, tr_out, crs_out = (r_.height, r_.width), r_.transform, r_.crs
             out = np.zeros((3, *shape), dtype="float32")
@@ -499,7 +500,7 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
         if ref is not None:
             # ON THE FIRE GRID. Downloaded on its own, EE hands vegetation a
             # grid that is off by one row or column from the fire raster's
-            # for 60% of the events (float rounding of the region bounds),
+            # for many of the events (float rounding of the region bounds),
             # and get_features cannot stack them. Nearest neighbour: land
             # cover is categorical, and nearest is what EE's own reprojection
             # did for every layer of the earlier datasets.
@@ -574,7 +575,7 @@ def window_of(geometry, margin_km: float = MARGIN_KM, min_px: int = MIN_PX,
 
     THE WINDOW IS NOT THE SCAR. Until 2026-08-25 each event's rasters covered
     its final contour plus 0.01 deg, so the raster extent itself told a model
-    where the fire would end, and 91% of the events were smaller than the
+    where the fire would end, and nearly every event was smaller than the
     64-px training patch, which the loader filled with zeros. Now: the
     contour's bounding box, `margin_km` on every side, and never less than
     `min_px` pixels of `scale_m` in either axis (256 px = 51 km: twice the
@@ -669,7 +670,7 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
         made += 1
     # A curated source stays curated: its exclusion record travels with the
     # ids, so `--phase curate` on the new tree is a no-op instead of taking
-    # another 15% of what is left (which is what happened on 2026-08-25).
+    # that same fraction again of what is left.
     src_ex = Path(src) / "excluded.json"
     if inherit and src_ex.exists():
         rec = json.loads(src_ex.read_text())

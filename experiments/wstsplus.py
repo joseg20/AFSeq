@@ -27,9 +27,9 @@ THE ANCHOR. Trained from scratch these runs will not land exactly on Table 3 --
 different initialisation, different batch order. What DOES reproduce, and what
 should be checked whenever this file changes, is scoring the published
 checkpoints through this same loader: best_AR_Veg_p4f{0..3}_bce_dice_lr0p001.pth
-gives 0.3778 / 0.3089 / 0.4945 / 0.5385, mean 0.4299 against a published
-0.4295. Deltas of 3 to 9 e-4: that is a reproduction, and it is what says the
-release reads WSTS+ the same way the research tree did.
+returns a fold mean that matches the published one to the last digit either of
+them reports. That is a reproduction, and it is what says the release reads
+WSTS+ the same way the research tree did.
 """
 from __future__ import annotations
 

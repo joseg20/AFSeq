@@ -17,7 +17,8 @@ Five directories, one job each. Nothing imports across them except through
 
 There is one implementation of the metric, shared by every experiment, and it
 is not meant to be reimplemented per experiment: scoring the whole scene
-instead of the crop moves UTAE-AR from 0.429 to 0.386.
+instead of the crop moves the score of a model by more than the gaps the
+tables are trying to resolve.
 
 ## Licence
 
@@ -71,21 +72,20 @@ and the 15% most persistent US fires out of the tree and records them in
 `requirements.txt` lists the direct dependencies with the versions used here;
 torch is unpinned because its build has to follow the driver.
 
-To move the whole thing: this repository and the AFSeq tree (about 19 GB of
-GeoTIFF, covariates and daily active-fire masks together) are enough for
-`experiments/afseq.py`. The WSTS+ experiments and the cross-benchmark ones
-also need the WSTS+ HDF5 (92 GB), and `experiments/cross/` needs the four
-published `best_AR_Veg_p4f{0-3}` checkpoints (82 MB) for its UTAE-AR on WSTS+
-cell.
+To move the whole thing: this repository and the AFSeq tree, which holds the
+covariates and the daily active-fire masks together, are enough for
+`experiments/afseq.py`. The WSTS+ experiments and the cross-benchmark ones also
+need the WSTS+ HDF5, and `experiments/cross/` needs the published
+`best_AR_Veg_p4f{0-3}` checkpoints for its UTAE-AR on WSTS+ cell.
 
 ## Placing the patch: AFSEQ_CROP
 
 The loader trains and scores on a 128-px patch centred on the day-t fire. When
 the front is wider than the patch, its bounding box can be bimodal, with two
 clusters at the ends and nothing in the middle, and the centred patch then
-holds no fire at all. That happens in 7.1% of train, 6.5% of val and 7.9% of
-test samples, and those rollouts start from an empty feedback mask and score
-near zero.
+holds no fire at all. It happens in a small but far from negligible share of
+the samples of every split, and those rollouts start from an empty feedback
+mask and score near zero.
 
 `AFSEQ_CROP=maxfire`, the default here, takes instead the patch with the most day-t
 fire, found exactly with an integral image and deterministically. It consumes
@@ -103,12 +103,11 @@ the fire-centred crop has room to move (`afseq_loader.fire_centred_crop`). A
 window cut to the contour would let the raster extent itself tell a model where
 the fire is going to end.
 
-The tree is built from 1,301 contours, with the 34 model channels, the DEM on
-the 200 m grid, and the detection hour as band 2 of the fire mask, which only
-the cross-benchmark fusion reads. Curation keeps 1,194 events, dropping 33
-duplicates and the 15% most persistent US fires, for 13,874 daily observations,
-about 19 GB of GeoTIFF and a 29 GB decoded cache in uint16. Persistence on the
-128-px fire-centred patch scores 0.124 ± 0.013. To rebuild:
+The tree is built from the contour file, with the model channels, the DEM on
+the fire grid, and the detection hour as the second band of the fire mask, which
+only the cross-benchmark fusion reads. Curation then drops the duplicated events
+and the most persistent US fires, and what survives is what the splits are drawn
+from. To rebuild:
 
     source env/example.sh
     python dataset/build_afseq.py --out <tree> --phase events --contours fires.geojson

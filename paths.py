@@ -56,13 +56,13 @@ SEED = int(os.environ.get("SEED", 23))
 # Acceptance tests, not documentation: if a refactor stops matching these, it
 # has a bug, however clean it looks.
 ANCHORS = {
-    "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,   # paper Table 3: 0.429
-    "utae_ar_afseq_t1": 0.432,                      # 3-seed mean
-    # 0.124 +- 0.013 (3 seeds; s5/s7/s23 = 0.1196/0.1136/0.1387):
-    # afseq.py --table --rows persistence on the AFSeq tree (256-px windows, 10 km
-    # margin, 128-px fire-centred patch, 34 channels, 1,194 events after
-    # build_afseq --phase curate). With all 1,301 events on the old contour
-    # windows and 64-px patches it was 0.252.
+    # UTAE-AR on the Veg feature set of WSTS+, mean over the published folds,
+    # scored on the centre crop.
+    "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,
+    # UTAE-AR on AFSeq at t+1, mean over the seeds.
+    "utae_ar_afseq_t1": 0.432,
+    # Persistence at t+1 on each benchmark, under the same sampler and crop:
+    # afseq.py --table --rows persistence reproduces the first one.
     "persistence_afseq_t1": 0.124,
     "persistence_wsts_t1": 0.193,
 }

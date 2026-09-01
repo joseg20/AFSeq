@@ -23,8 +23,8 @@ CHANGE 1. Variable-length histories, padded and masked     [temporal models]
 
     AFSeq emits a VARIABLE-length history: `seq_dates = dates[max(0, idx-15) :
     idx+1]`, so a fire observed on its second day yields T=2. Measured on
-    splits_v4_s23: 80.3% of training samples and 75.5% of test samples have
-    T < 16, and 36.1% of the test set has T < 5.
+    on our splits most training and test samples are shorter than the maximum
+    history, and a sizeable part of the test set is shorter than the WSTS lead.
 
     WSTS never has this, since it serves exactly `n_leading_observations`
     days, so

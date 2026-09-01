@@ -4,13 +4,11 @@
     python dataset/afseq_cache.py --check 60         # cached == raw, bit for bit
     AFSEQ_CACHE=/path/to/cache python experiments/afseq.py --launch
 
-WHY. Profiled on a training sample of Seq2SeqActivePadded (patch 64 then, history
-up to 16): 186 ms per sample, 89% of it inside load_raster, which is 57
-rasterio opens
-per sample, five .tif per day of history. The dataset is 843 MB and sits whole
-in the page cache, iowait is 0: the cost is decoding, not disk. With four
-workers that is 3 s per batch of 64 and ~4 min per epoch, GPU at 0-40%, and it
-is why every AFSeq run here is CPU-bound while we are asked to use fewer cores.
+WHY. Profiled on a training sample of Seq2SeqActivePadded: nearly all of the
+time per sample is spent inside load_raster, which opens several .tif per day of
+history. The dataset fits whole in the page cache and iowait is zero, so the
+cost is decoding, not disk. That is why every AFSeq run here is CPU-bound while
+we are asked to use fewer cores.
 
 WHAT IT STORES. Exactly what the loader would have computed, once:
 
@@ -21,8 +19,8 @@ WHAT IT STORES. Exactly what the loader would have computed, once:
 
 A day that get_features answers with None (no active-fire mask the next day, a
 missing static layer, an exception it swallows) is simply absent, and the
-cached call answers None too. Static channels (terrain, land cover, NDVI/EVI/ET: 23 of 34) are stored
-once per event; the AFSeq tree comes to ~13 GB instead of 40.
+cached call answers None too. The static channels (terrain, land cover,
+NDVI/EVI/ET) are stored once per event, which is most of the saving.
 
 HOW IT PLUGS IN. `install(module)` replaces `get_features` and `load_raster`
 in the namespace of dataset/afseq_loader.py with lookups into the cache. Nothing
@@ -30,7 +28,7 @@ else changes: same index, same crops, same padding, same random.seed(idx).
 The four places that import the loader call `install_if_configured` after the
 import, and it is a no-op unless AFSEQ_CACHE is set. `--check` proves the
 equivalence the only way that counts: on the same samples, raw versus
-cached, masks equal and covariates within the uint16 quantum (7.7e-6).
+cached, masks equal and covariates within the uint16 quantum.
 
 It refuses to install on a cache that is missing any fire of the dataset (no
 DONE marker): a half-built cache would otherwise turn missing days into the
@@ -93,9 +91,9 @@ def _build_fire(args) -> tuple[str, int, int]:
             np.save(out / "static.npy", np.rint(static * 65535.0).astype(np.uint16))
         assert np.array_equal(X[:N_STATIC], static), f"{fid}/{day}: static changed"
         # dynamic channels as uint16: every channel is min-max normalised
-        # into [0, 1] (the fire mask is 0/1), so 65535 levels give an error
-        # of at most 7.7e-6, and half the bytes of float32, which is what
-        # lets a 256-px-window cache fit next to the dataset.
+        # into [0, 1] (the fire mask is 0/1), so the quantisation error is far
+        # below anything that matters here, at half the bytes of float32, which
+        # is what lets the cache fit next to the dataset.
         dyn = X[N_STATIC:]
         assert dyn.min() >= 0.0 and dyn.max() <= 1.0, f"{fid}/{day}: dynamic out of [0,1]"
         np.save(out / f"{day}.npy", np.rint(dyn * 65535.0).astype(np.uint16))
@@ -212,7 +210,7 @@ def check(n: int, splits_file, horizon: int = 5, patch=128, max_history=16):
 
         bad = 0
         for i, x, y in zip(idxs, a, b):
-            # uint16 quantisation of the dynamic channels: |diff| <= 7.7e-6;
+            # uint16 quantisation of the dynamic channels;
             # masks (Y, and the fire channel) must still match exactly
             same = (all(np.allclose(u, v, rtol=0, atol=1e-5) for u, v in zip(x[:2], y[:2]))
                     and np.array_equal(x[0][:, FIRE_CHANNEL], y[0][:, FIRE_CHANNEL])
