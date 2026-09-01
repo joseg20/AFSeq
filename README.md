@@ -28,12 +28,9 @@ the vendored commit and the reversible compatibility patches applied to it.
 ## The rule the dataset code enforces
 
 A missing measurement is written as NaN and recorded in `provenance.json`; it
-is never replaced by a plausible constant. The previous pipeline answered an
-empty Earth Engine collection with `constant([0,0])` for reflectance and
-`constant(273.15)` -- 0 C -- for land surface temperature. Both read as real
-measurements once written, and they silently killed 83% of the reflectance and
-34% of the LST without one error message. Imputation happens at load time, with
-the channel mean over the training split.
+is never replaced by a plausible constant, which would read as a real
+measurement once written. Imputation happens at load time, with the channel
+mean over the training split.
 
 ## Acceptance tests
 
@@ -90,21 +87,21 @@ the tables of the paper were produced with.
 
 ## AFSeq: the dataset the paper uses
 
-Until 2026-08-25 every event's rasters covered its final contour plus 0.01
-deg: 91% of the events were smaller than the 64-px training patch (the loader
-padded them with zeros) and the raster extent itself told a model where the
-fire would end. `build_afseq.window_of` now makes the window the contour's
-bounding box plus 5 km on every side, never smaller than 128 x 128 px at
-200 m (25.6 km, twice the patch), and the loader crops the patch around the
-day-t fire with jitter (`afseq_loader.fire_centred_crop`). Built on 2026-08-25 from the 1,301 contours (window = contour bbox + 10 km,
-never below 256 x 256 px at 200 m; 34 model channels; DEM stored on the 200 m
-grid; detection hour as band 2 of the fire mask, for the fusion only). The
-curation on this tree keeps 1,194 events (33 duplicates and the 15% most
-persistent US events out). 13,874 daily observations, ~19 GB of GeoTIFF, 29 GB
-decoded cache (uint16). Persistence with the 128-px fire-centred patch:
+THE WINDOW IS NOT THE SCAR. `build_afseq.window_of` makes each event's raster
+the bounding box of its final contour plus 10 km on every side, never smaller
+than 256 x 256 px at 200 m -- twice the 128-px training patch, so the
+fire-centred crop has room to move (`afseq_loader.fire_centred_crop`). A window
+cut to the contour would let the raster extent itself tell a model where the
+fire is going to end.
+
+Built from 1,301 contours: 34 model channels, DEM on the 200 m grid, detection
+hour as band 2 of the fire mask (the cross-benchmark fusion is the only consumer).
+Curation keeps 1,194 events -- 33 duplicates and the 15% most persistent US
+events go out -- for 13,874 daily observations, ~19 GB of GeoTIFF and a 29 GB
+decoded cache (uint16). Persistence on the 128-px fire-centred patch:
 0.124 +- 0.013. To rebuild:
 
-    source env/<machine>.sh
+    source env/example.sh
     python dataset/build_afseq.py --out <tree> --phase events --contours fires.geojson
     python dataset/build_afseq.py --out <tree> --phase all --workers 12
 
