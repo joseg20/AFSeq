@@ -47,13 +47,13 @@ environment, with defaults relative to the repository:
     <parent>/release_paper/        this repo
     <parent>/data/afseq/           AFSeq day rasters          AFSEQ_DATA
     <parent>/data/afseq_cache/     decoded copy (optional)    AFSEQ_CACHE
-    <parent>/data/wstsplus/hdf5/   WSTS+ HDF5 (exp1/4/7 only) WSTS_HDF5
+    <parent>/data/wstsplus/hdf5/   WSTS+ HDF5 (see below)     WSTS_HDF5
     <parent>/runs/                 outputs                    RUNS_DIR
 
 `WSP_DATA` moves `data/` as a whole. `env/example.sh` is the template: copy it,
 edit the four directories and `source` it before launching. Splits, channel
 means and the fusion statistics ship inside the repo, in `dataset/splits`,
-`dataset/channel_means.json` and `experiments/exp4/afseq_channel_stats.json`.
+`dataset/channel_means.json` and `experiments/cross/afseq_channel_stats.json`.
 
 Each event day holds `active-fire.tif` (the daily VIIRS active-fire mask, which
 is both the target and the fire channel), `climate.tif` with seven bands and
@@ -72,10 +72,11 @@ and the 15% most persistent US fires out of the tree and records them in
 torch is unpinned because its build has to follow the driver.
 
 To move the whole thing: this repository and the AFSeq tree (about 19 GB of
-GeoTIFF, covariates and daily active-fire masks together) are enough for exp2
-and exp3. exp1, exp4 and exp7 also need the WSTS+ HDF5 (92 GB), and exp4's
-UTAE-AR on WSTS+ needs the four published `best_AR_Veg_p4f{0-3}` checkpoints
-(82 MB).
+GeoTIFF, covariates and daily active-fire masks together) are enough for
+`experiments/afseq.py`. The WSTS+ experiments and the cross-benchmark ones
+also need the WSTS+ HDF5 (92 GB), and `experiments/cross/` needs the four
+published `best_AR_Veg_p4f{0-3}` checkpoints (82 MB) for its UTAE-AR on WSTS+
+cell.
 
 ## Placing the patch: AFSEQ_CROP
 
@@ -121,4 +122,4 @@ resumable, so a raster that is already healthy is never downloaded twice. To
 reproduce an existing tree's event list instead of starting from a contour
 file, use `--phase events --from-tree <old> --fresh`.
 
-Every number of exp2 and exp3 is trained on this tree.
+Every AFSeq number in the paper is trained on this tree.

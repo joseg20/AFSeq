@@ -237,7 +237,7 @@ def main():
                     help="which dataset to train on. wstsplus goes through "
                          "benchmarks/wstsplus_data.py, which wraps THEIR "
                          "loader; fused is the two joined per fold in the "
-                         "shared Veg space, defined by experiments/exp4/")
+                         "shared Veg space, defined by experiments/cross/")
     ap.add_argument("--fold", type=int, default=0,
                     choices=[0, 1, 2, 3] + list(range(100, 112)), metavar="FOLD",
                     help="wstsplus only: 0-3 = published 4-fold; "
@@ -318,9 +318,10 @@ def main():
 
     if args.benchmark == "fused":
         # The fused benchmark is defined by the experiment that uses it, not by
-        # the trainer: which fires join which fold is exp4's claim to make, so
+        # the trainer: which fires join which fold is the cross-benchmark
+        # experiment's claim to make, so
         # the definition lives there and this only consumes it.
-        sys.path.insert(0, str(ROOT / "experiments" / "exp4"))
+        sys.path.insert(0, str(ROOT / "experiments" / "cross"))
         from fusion import N_VEG, collate, fused, single
 
         def split(name):

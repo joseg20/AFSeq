@@ -11,7 +11,7 @@ Default layout the code expects next to the repository:
       release_paper/           this repository
       data/afseq/              AFSeq: covariates AND daily active masks (AFSEQ_DATA)
       data/afseq_cache/        decoded copy, optional  (AFSEQ_CACHE)
-      data/wstsplus/hdf5/      WSTS+ HDF5, exp1/4/5    (WSTS_HDF5)
+      data/wstsplus/hdf5/      WSTS+ HDF5              (WSTS_HDF5)
       runs/                    training outputs         (RUNS_DIR)
 
 `WSP_DATA` moves the whole data/ directory at once; the individual variables
@@ -59,7 +59,7 @@ ANCHORS = {
     "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,   # paper Table 3: 0.429
     "utae_ar_afseq_t1": 0.432,                      # 3-seed mean
     # 0.124 +- 0.013 (3 seeds; s5/s7/s23 = 0.1196/0.1136/0.1387):
-    # exp2.py --table --rows persistence on the AFSeq tree (256-px windows, 10 km
+    # afseq.py --table --rows persistence on the AFSeq tree (256-px windows, 10 km
     # margin, 128-px fire-centred patch, 34 channels, 1,194 events after
     # build_afseq --phase curate). With all 1,301 events on the old contour
     # windows and 64-px patches it was 0.252.

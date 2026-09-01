@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Their models on the fused benchmark, with their configuration.
 
-    python experiments/exp4/train_theirs.py --model utae_res18 --fold 0
-    python experiments/exp4/train_theirs.py --model res50_unet --source wstsplus
+    python experiments/cross/train_theirs.py --model utae_res18 --fold 0
+    python experiments/cross/train_theirs.py --model res50_unet --source wstsplus
 
 Same split of responsibilities as benchmarks/train_afseq_theirs.py: the model,
 the loss, the optimiser, the three Lightning steps and the AP metric all come
 from benchmarks/wsts+ unmodified. This file only hands them data -- here, the
-fused Veg-space dataset defined by exp4/fusion.py -- and runs their Trainer.
+fused Veg-space dataset defined by cross/fusion.py -- and runs their Trainer.
 
 THE MODELS, and where each configuration comes from:
 

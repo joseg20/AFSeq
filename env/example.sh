@@ -10,7 +10,8 @@ export WSP_DATA=/path/to/data
 export AFSEQ_DATA=$WSP_DATA/afseq
 export AFSEQ_CACHE=$WSP_DATA/afseq_cache
 
-# WSTS+ as HDF5 (benchmarks/make_wsts_hdf5.py). Only exp1, exp4 and exp7 need it.
+# WSTS+ as HDF5 (benchmarks/make_wsts_hdf5.py). Only the WSTS+ and
+# cross-benchmark experiments need it.
 export WSTS_HDF5=$WSP_DATA/wstsplus/hdf5
 
 # Where checkpoints, logs and result JSONs go.

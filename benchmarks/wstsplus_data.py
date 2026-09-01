@@ -52,7 +52,7 @@ import os
 # HDF5 file locking over NFS hangs or serialises the workers (each one opens
 # the same files): 8 workers at 5% CPU, GPU at 0%, no bytes read -- measured on
 # an NFS-backed cluster. Local disks never showed it. Off here, in
-# the loader, so every entry point (train.py, exp1, exp4, the tests) gets it.
+# the loader, so every entry point (train.py, the experiments, the tests) gets it.
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 import sys
 from pathlib import Path

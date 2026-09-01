@@ -1,22 +1,26 @@
 # experiments/
 
-One file per experiment. Each declares WHICH runs make up its table, knows how
-to launch them, and knows how to score them:
+Three experiments, one file or package each. Every one of them declares which
+runs make up its table, knows how to launch them, and knows how to score them:
 
     source env/example.sh              # your machine's exports, see README
-    python experiments/expN.py --launch [--dry-run]
-    python experiments/expN.py --table
+    python experiments/<experiment>.py --launch [--dry-run]
+    python experiments/<experiment>.py --table
 
 | file | what it produces |
 |---|---|
-| `exp1.py` | UTAE-AR on WSTS+: 3 feature sets x 4 published folds x 2 history regimes |
-| `exp2.py` | the architecture table on AFSeq: 6 architectures x 3 splits, plus persistence |
-| `exp3.py` | the teacher-forcing schedule ablation for UTAE-AR on AFSeq |
-| `exp4/` | the cross-benchmark table on the AFSeq+WSTS+ fusion (Veg space), plus the native WSTS+ baseline |
-| `exp6.py` | supplementary: leave-one-region-out on AFSeq (S.America / US / S.Europe), UTAE-AR and UTAE-Res18, against exp2's checkpoints on the same fires |
-| `exp7.py` | UTAE-AR on the ORIGINAL WSTS, 12-fold protocol; `exp7_score.py` scores it |
-| `exp1_score_fixed.py` | test AP per fold of the published UTAE-AR anchors, the three feature sets |
+| `afseq.py` | the architecture table on AFSeq: 6 architectures x 3 splits, plus persistence |
+| `wstsplus.py` | UTAE-AR on WSTS+: 3 feature sets x 4 published folds x 2 history regimes |
+| `wstsplus_score.py` | test AP per fold of the published UTAE-AR anchors, for the three feature sets |
+| `cross/` | the cross-benchmark table on the AFSeq and WSTS+ fusion in Veg space, plus the native WSTS+ baseline |
 | `runner.py` | the shared job runner: lanes, one GPU, resumable, hard CPU ceiling |
+
+Inside `cross/`, `cross.py` is the experiment itself and the rest is what it
+needs: `channels.py` maps AFSeq into the WSTS+ Veg channel space, `fusion.py`
+defines the fused splits, `native.py` trains the WSTS+-only baseline,
+`train_theirs.py` runs their Trainer on the fused data, `eval_test.py` scores
+the checkpoints on each benchmark's own test set, and `persist_wsts.py` is the
+persistence floor per fold.
 
 `--only SUBSTR...` restricts `--launch` to the jobs whose name contains one of
 the substrings. It is for the one situation where part of a matrix is already
@@ -53,7 +57,7 @@ to a number is now here.
 ## Scoring is not training
 
 `--table` never retrains. It loads the checkpoints `training/train.py` wrote and
-scores them under one protocol stated at the top of each file. `exp2.py` also
+scores them under one protocol stated at the top of each file. `afseq.py` also
 re-checks, for every model as it scores it, that appending padded frames does
 not change its output. Four of the five architectures once failed that, and
 the table rows measured something other than what they claimed.

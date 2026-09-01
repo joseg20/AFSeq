@@ -16,10 +16,10 @@ of the same region until the test's estimated persistence AP sits in the
 window, keeping every region's share of fires, sampled days and burned pixels
 within `--tol`. It exists for benchmark studies (what if the test floor were
 X?) and is not what produced the shipped splits. Persistence of the shipped
-splits, measured with exp2.py --table --rows persistence: 0.124 +- 0.013.
+splits, measured with afseq.py --table --rows persistence: 0.124 +- 0.013.
 
 `--holdout REGION [REGION ...]` writes leave-one-region-out splits instead
-(experiments/exp6.py): Test = EVERY event of that region, Train/Val = the other
+(leave-one-region-out): Test = EVERY event of that region, Train/Val = the other
 regions, split at random with the same train:val ratio as the shipped splits
 (70:15) and the same RNG discipline (ids sorted before shuffling, one RNG per
 seed). Nothing is pinned. -> splits_loro_<slug>.txt, slug in REGION_SLUG.
@@ -200,7 +200,7 @@ def main():
     ap.add_argument("--no-write", action="store_true", help="solo estimar")
     ap.add_argument("--holdout", nargs="+", metavar="REGION", default=None,
                     help="leave-one-region-out: Test = toda la region, Train/Val = "
-                         "el resto (experiments/exp6.py). Regiones: "
+                         "el resto. Regiones: "
                          + ", ".join(sorted(REGION_SLUG)))
     a = ap.parse_args()
 

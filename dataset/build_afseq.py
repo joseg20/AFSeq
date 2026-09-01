@@ -347,7 +347,8 @@ def fetch_reflectance(region, date, out_path, ref_path):
     # I1 (0.64 um) and I2 (0.86 um) on the 500 m grid, M11 (1.6 um SWIR) on
     # the 1 km grid: the three VNP09GA bands WSTS uses, in the order the
     # loader unpacks them. M11 was added on 2026-08-25 (it was the one Veg
-    # channel AFSeq lacked; exp4 had to fill it with a constant).
+    # channel AFSeq lacked; the cross-benchmark fusion had to fill it with a
+    # constant).
     col = (ee.ImageCollection(REFL_PRODUCT).filterDate(d0, d0.advance(1, "day"))
            .filterBounds(region).select(["I1", "I2", "M11"]))
     if retry(lambda: col.size().getInfo()) == 0:

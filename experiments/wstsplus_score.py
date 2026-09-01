@@ -69,7 +69,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--features", nargs="+", default=["Veg", "Multi", "All"])
     ap.add_argument("--out", type=Path,
-                    default=paths.RUNS / "exp4" / "exp1_perfold_fixed.json")
+                    default=paths.RUNS / "wstsplus" / "perfold_test_ap.json")
     a = ap.parse_args()
     res = {}
     for feat in a.features:

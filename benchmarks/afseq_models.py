@@ -52,7 +52,7 @@ def masked_group_norm(gn, x, valid):
     statistics over the TEMPORAL axis, padded steps included, and the attention
     mask downstream cannot undo it because the leak happens before the
     attention. Measured here as a padding drift of 1.4e-1 / 2.9e-1 in the
-    scored probabilities of utae_res18 (exp2, 25-ago) before this fix.
+    scored probabilities of utae_res18 before this fix.
 
     x: (N, C, T) · valid: (N, T), 1.0 where the step is real
     """

@@ -20,7 +20,7 @@ THE SAMPLE. One item is (X_hist, fut_covars, Y, valid, meta):
     meta        (fid, day t, (H0, W0) of the scene)
 Histories have variable length; `collate_padded` pads them with zero frames at
 the END, and every model reads that padding through a pad mask (see the
-PADDING note in experiments/exp2.py). require_fire_on_t=True is AFSeq's
+PADDING note in experiments/afseq.py). require_fire_on_t=True is AFSeq's
 protocol: a sample needs fire on day t and at least one observed day after.
 
 THE RASTER STACK (get_features). Per fire day: dem.tif (elevation, slope,
@@ -62,7 +62,7 @@ from paths import CHANNEL_MEANS  # noqa: E402
 
 # THE CHANNEL LAYOUT, the one place it is defined. Everything that needs a
 # count or an index imports it from here (train.py, afseq_datamodule.py,
-# exp2.py, exp4/channels.py). Changed on 2026-08-25 from 17 to 34 channels:
+# experiments/afseq.py, experiments/cross/channels.py). 34 channels:
 # land cover went from one ordinal scalar to 17 one-hot classes (it is a
 # category, and that is how WSTS encodes it) and VNP09GA M11 joined I1/I2
 # (the one Veg channel of WSTS+ that AFSeq lacked).

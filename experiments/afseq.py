@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Experiment 2 -- the architecture table on AFSeq.
 
-    python experiments/exp2.py --launch      # train the matrix
-    python experiments/exp2.py --table       # score it on test
+    python experiments/afseq.py --launch      # train the matrix
+    python experiments/afseq.py --table       # score it on test
 
 THE MATRIX: 6 trainable architectures x 3 splits = 18 runs, plus persistence,
 which is measured rather than trained.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Experiment 4 -- the cross-benchmark table.
 
-    python experiments/exp4/exp4.py --launch [--dry-run]
-    python experiments/exp4/exp4.py --table
+    python experiments/cross/cross.py --launch [--dry-run]
+    python experiments/cross/cross.py --table
 
 What each model scores on the OTHER benchmark, and what it scores when trained
 on both:
@@ -19,11 +19,11 @@ on both:
   UTAE-Res18    theirs. Their best model overall.
   Res50-Unet    theirs. Their best single-frame encoder after res18.
                 Both run their repo unmodified with the configuration every
-                published sweep of theirs passes; see exp4/train_theirs.py.
+                published sweep of theirs passes; see cross/train_theirs.py.
 
 EVERYTHING HAPPENS IN THE VEG SPACE (7 channels), which is what makes this
-table commensurable with exp1: the WSTS+ column here and the Veg row of exp1
-are the same data through the same slice. AFSeq is mapped in by exp4/channels
+table commensurable with wstsplus.py: the WSTS+ column here and the Veg row of wstsplus.py
+are the same data through the same slice. AFSeq is mapped in by cross/channels
 .py -- 5 of the 7 slots have a counterpart, 2 are filled with the WSTS training
 mean, and that fill is a declared confound: a model trained on the union can
 tell the benchmarks apart by those two constant slots.
@@ -33,7 +33,7 @@ each benchmark's own test set, in its own column. Pooling would let whichever
 side contributes more pixels decide the number.
 
 CONSISTENCY CHECK. The UTAE-AR / trained-on-WSTS+ / scored-on-WSTS+ cell should
-land near exp1's Veg row, and the published checkpoints scored through this
+land near the Veg row of wstsplus.py, and the published checkpoints scored through this
 same loader give 0.4299 against Table 3's 0.4295. If a rewrite moves that cell,
 the loader changed, not the model.
 """
@@ -71,13 +71,13 @@ def tag_of(model: str, source: str, fold: int) -> str:
 
 def matrix(out: Path, models=MODELS, sources=SOURCES, folds=FOLDS,
            native: bool = True) -> list[Job]:
-    """Ours through training/train.py, theirs through exp4/train_theirs.py.
+    """Ours through training/train.py, theirs through cross/train_theirs.py.
 
     `native` prepends the WSTS+-only Res18-Unet baseline, which runs THEIR repo
     end to end -- their loader, their windowing, their train.py. Everything else
     in this table goes through our Veg-space loader, so that row is the control
     that says the space conversion did not change what their model can do. It
-    also produces the encoder experiments/exp5 reads its features from.
+    also produces the encoder the representation analysis reads from.
     """
     jobs = []
     if native:
@@ -140,9 +140,10 @@ def main():
                     help="omitir el baseline de su repo (4 folds)")
     ap.add_argument("--only-native", action="store_true",
                     help="lanzar SOLO ese baseline. Va primero en la cola "
-                         "porque su encoder es el que lee exp5, y no tiene "
+                         "porque su encoder es el que alimenta el analisis "
+                         "de representaciones, y no tiene "
                          "sentido esperar a las 36 corridas de la matriz")
-    ap.add_argument("--out", type=Path, default=RUNS / "exp4")
+    ap.add_argument("--out", type=Path, default=RUNS / "cross")
     a = ap.parse_args()
 
     if a.launch:

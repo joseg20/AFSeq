@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fusing AFSeq into each published WSTS+ fold, in the shared Veg space.
 
-    python experiments/exp4/fusion.py        # sizes of every fused split
+    python experiments/cross/fusion.py        # sizes of every fused split
 
 WHAT "FUSED" MEANS HERE. A WSTS+ fold is three year groups: 4 train, 2 val, 2
 test. AFSeq has its own train/val/test split of fires. The fused fold joins them
@@ -57,7 +57,7 @@ PART = ("train", "val", "test")
 # fires held by both benchmarks; dropped from the WSTS+ side (fire_overlap.json)
 WSTS_DROP = ("fire_AZ3370210944920231026", "fire_CA3343811682320231030",
              "fire_CA3396811772620231030")
-AFSEQ_STATS = HERE / "afseq_channel_stats.json"     # shipped with exp4
+AFSEQ_STATS = HERE / "afseq_channel_stats.json"     # shipped with this package
 
 
 def _afseq_stats():

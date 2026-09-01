@@ -25,7 +25,7 @@ experiments/full_regions.py
 experiments/afseq_terciles.py
 experiments/wsts_sizes.py
 experiments/exp1_score.py
-experiments/exp4/fig_*.py
-experiments/exp4/persist_horizons.py
-experiments/exp4/rollout_res18.py
-experiments/exp4/scar_t5.py
+experiments/cross/fig_*.py
+experiments/cross/persist_horizons.py
+experiments/cross/rollout_res18.py
+experiments/cross/scar_t5.py

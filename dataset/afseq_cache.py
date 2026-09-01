@@ -3,7 +3,7 @@
 
     python dataset/afseq_cache.py --build            # once, ~5 min
     python dataset/afseq_cache.py --check 60         # cached == raw, bit for bit
-    AFSEQ_CACHE=/path/to/cache python experiments/exp2.py --launch
+    AFSEQ_CACHE=/path/to/cache python experiments/afseq.py --launch
 
 WHY. Profiled on a training sample of Seq2SeqActivePadded (patch 64 then, history
 up to 16): 186 ms per sample, 89% of it inside load_raster -- 57 rasterio opens

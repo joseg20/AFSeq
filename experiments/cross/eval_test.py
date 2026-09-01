@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Exp4 -- TEST scoring of the fused checkpoints, one column per benchmark.
 
-    python experiments/exp4/eval_test.py --models utae_ar --sources afseq
+    python experiments/cross/eval_test.py --models utae_ar --sources afseq
 
-Same protocol as exp2's table: pooled AP at t+1, crop 128, valid mask on t+1,
+Same protocol as the table of afseq.py: pooled AP at t+1, crop 128, valid mask on t+1,
 ties collapsed as sklearn (evaluation/metrics.py). Each checkpoint is scored on
-each benchmark's own test set, in its own column -- never pooled (see exp4.py).
+each benchmark's own test set, in its own column -- never pooled (see cross.py).
 The AFSeq test set is fold-independent; the WSTS+ test years change per fold.
 
 Only utae_ar for now: the "theirs" rows (utae_res18, res50_unet) come out of
 train_theirs.py with their own checkpoint format and need their own loader.
 
-Results append into RUNS/exp4/eval_test.json, one entry per (model, source,
+Results append into RUNS/cross/eval_test.json, one entry per (model, source,
 fold, benchmark), so partial invocations while the matrix still trains are fine.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from paths import RUNS                                          # noqa: E402
 from evaluation.metrics import pooled_ap_gpu                    # noqa: E402
 from train import SINGLE_STEP, build_model, forward             # noqa: E402
 from fusion import N_VEG, collate, single                       # noqa: E402
-from exp4 import tag_of                                         # noqa: E402
+from cross import tag_of                                         # noqa: E402
 
 
 def load_res18(tag: str, out_dir: Path):
@@ -47,7 +47,7 @@ def load_res18(tag: str, out_dir: Path):
     Los centinelas (placeholder) no cuentan como runs hechos.
     """
     import json as _json
-    for d in (out_dir, out_dir.parent / "exp4_mirror"):
+    for d in (out_dir, out_dir.parent / "cross_mirror"):
         js = d / f"{tag}.json"
         if not js.exists():
             continue
@@ -74,7 +74,7 @@ def load_res18(tag: str, out_dir: Path):
 
 def loader_of(benchmark: str, fold: int, batch_size: int, workers: int):
     # horizon=1: this scores t+1 only, and the 5-step checkpoint loads into a
-    # 1-step model unchanged (same trick as exp2's table)
+    # 1-step model unchanged (same trick as the table of afseq.py)
     ds = single(benchmark, fold, "test", horizon=1)
     return DataLoader(ds, batch_size=batch_size, shuffle=False,
                       num_workers=workers, pin_memory=True,
@@ -118,7 +118,7 @@ def main():
     ap.add_argument("--anchor-dir", type=Path, default=None,
                     help="directorio de best_AR_Veg_p4f*.pth para la fuente "
                          "pseudo 'wsts_anchor'")
-    ap.add_argument("--out", type=Path, default=RUNS / "exp4")
+    ap.add_argument("--out", type=Path, default=RUNS / "cross")
     a = ap.parse_args()
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -157,7 +157,7 @@ def main():
                     continue
                 if source == "wsts_anchor":
                     # published anchor checkpoints (trained on WSTS+ Veg, the
-                    # ones behind exp1's 0.4299 reproduction), scored cross
+                    # ones behind the 0.4299 reproduction of wstsplus.py), scored cross
                     ck = (Path(a.anchor_dir)
                           / f"best_AR_Veg_p4f{fold}_bce_dice_lr0p001.pth")
                     tag = ck.stem

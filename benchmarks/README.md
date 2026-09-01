@@ -52,7 +52,7 @@ one — the opposite of what their paper describes. We do not correct it: their
 published numbers come from this code, and the question these tables ask is how
 *their* model transfers, not how a fixed version would.
 
-## Getting WSTS+ (only exp1, exp4 and exp7 need it)
+## Getting WSTS+ (only the WSTS+ and cross-benchmark experiments need it)
 
 1. `benchmarks/download_wstsplus.sh <dir>` downloads Zenodo record 17584629,
    WSTSPlus.zip, 19.9 GB, md5 42da7598cc33a170064e78d8027148c9. Resumable by

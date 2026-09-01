@@ -6,10 +6,10 @@
   dataset/channel_means.json            NaN-aware mean of every channel BEFORE
                                         imputation: what impute_missing writes
                                         into a hole (paths.CHANNEL_MEANS).
-  experiments/exp4/afseq_channel_stats.json
+  experiments/cross/afseq_channel_stats.json
                                         mean and std of every channel AFTER
                                         normalisation and imputation: what
-                                        exp4/channels.py z-scores with.
+                                        cross/channels.py z-scores with.
 
 Both were once produced by one-off scripts in the research tree (steps12.py,
 with_wstsplus/...); this is the same computation on the release loader, over
@@ -79,7 +79,7 @@ def main():
              "impute_missing writes these into holes",
         channels=L.CHANNELS, mean=mean_raw.tolist(),
         nan_fraction=(1 - raw_n / raw_n.max()).tolist()), indent=1))
-    out2 = ROOT / "experiments" / "exp4" / "afseq_channel_stats.json"
+    out2 = ROOT / "experiments" / "cross" / "afseq_channel_stats.json"
     out2.write_text(json.dumps(dict(
         source=str(AFSEQ), n_samples=len(days), n_pixels=int(n),
         channels=L.CHANNELS + ["fire_hour"], mean=mean.tolist(), std=std.tolist()), indent=1))

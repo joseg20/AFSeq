@@ -156,7 +156,7 @@ def most_persistent(stats: dict, drop: dict) -> dict:
 
 
 def persistence_ap(stats: dict, fids) -> float:
-    """Closed-form pooled AP of a binary score (validated against exp2)."""
+    """Closed-form pooled AP of a binary score (validated against afseq.py)."""
     s = {k: sum(stats[f][k] for f in fids) for k in ("TP", "FP", "FN", "P", "N")}
     if s["TP"] + s["FN"] == 0:
         return 0.0

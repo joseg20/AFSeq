@@ -29,4 +29,4 @@ for fold in range(4):
     print(f"f{fold}: AP={ap:.4f} ({res[f'f{fold}']['pixels']:,} px)")
 aps = [r["ap"] for r in res.values()]
 print(f"media {statistics.mean(aps):.4f} +- {statistics.stdev(aps):.4f}")
-(RUNS/"exp4"/"persist_wsts_t1.json").write_text(json.dumps(res, indent=1))
+(RUNS/"cross"/"persist_wsts_t1.json").write_text(json.dumps(res, indent=1))

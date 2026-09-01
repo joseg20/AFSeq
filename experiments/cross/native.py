@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Exp 4, part one: the native WSTS+ baseline (their model, their loader).
 
-    python experiments/exp4/native.py --launch
-    (scored by exp4/exp4.py --table)
+    python experiments/cross/native.py --launch
+    (scored by cross/cross.py --table)
 
                           AFSeq      WSTS+
     Trained on WSTS+

@@ -4,14 +4,14 @@
 WHY VEG. AFSeq has 34 channels, WSTS+ has 40, and they are not subsets of one
 another. To train ONE model on both, the two have to be expressed in the same
 space, and the space has to be one the published checkpoints already live in --
-otherwise the fused row cannot be compared with the WSTS+-only row of exp1.
+otherwise the fused row cannot be compared with the WSTS+-only row of wstsplus.py.
 That space is "Veg", the 7 slots their own cfgs use:
 
     0 m11   1 i2   2 i1   3 ndvi   4 evi2   5 fire hour   6 fire binary
 
 WSTS+ needs no mapping: Veg IS a slice of its 40 processed channels, so its side
 is `x[:, [0,1,2,3,4,38,39]]` and nothing else happens to it. That is what keeps
-the fused experiment commensurable with exp1.
+the fused experiment commensurable with wstsplus.py.
 
 AFSeq needs the table below. Since 2026-08-25 all seven slots have a
 counterpart: M11 joined the reflectance, and the detection hour travels as

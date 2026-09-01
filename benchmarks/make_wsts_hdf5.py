@@ -29,7 +29,7 @@ para reconstruir los ocho de una vez):
       --target_dir $WSTS_HDF5 --years 2016 2017 2018 2019 2020 2021 2022 2023
 
 Movido al release el 25/08 desde with_wstsplus/make_hdf5_new_years.py; es el
-script con el que se construyo el HDF5 que usan exp1/exp4/exp5.
+script con el que se construyo el HDF5 que usan wstsplus.py y cross/.
 """
 import argparse
 import glob

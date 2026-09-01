@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Experiment 1 -- UTAE-AR on WSTS+, across feature sets and folds.
 
-    python experiments/exp1.py --launch          # train the matrix
-    python experiments/exp1.py --launch --dry-run
-    python experiments/exp1.py --table           # score it
+    python experiments/wstsplus.py --launch          # train the matrix
+    python experiments/wstsplus.py --launch --dry-run
+    python experiments/wstsplus.py --table           # score it
 
 THE MATRIX: 3 feature sets x 4 published folds x 2 history regimes = 24 runs.
 
@@ -116,7 +116,7 @@ def main():
                     help="lanzar solo los trabajos cuyo nombre contenga esto")
     ap.add_argument("--history", choices=HISTORIES, action="append",
                     help="limitar a un regimen; por defecto los dos")
-    ap.add_argument("--out", type=Path, default=RUNS / "exp1")
+    ap.add_argument("--out", type=Path, default=RUNS / "wstsplus")
     a = ap.parse_args()
 
     if a.launch:
