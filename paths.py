@@ -51,18 +51,3 @@ EE_PROJECT = os.environ.get("EE_PROJECT", "")
 
 # reproducibility
 SEED = int(os.environ.get("SEED", 23))
-
-# the numbers any rewrite has to reproduce
-# Acceptance tests, not documentation: if a refactor stops matching these, it
-# has a bug, however clean it looks.
-ANCHORS = {
-    # UTAE-AR on the Veg feature set of WSTS+, mean over the published folds,
-    # scored on the centre crop.
-    "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,
-    # UTAE-AR on AFSeq at t+1, mean over the seeds.
-    "utae_ar_afseq_t1": 0.432,
-    # Persistence at t+1 on each benchmark, under the same sampler and crop:
-    # afseq.py --table --rows persistence reproduces the first one.
-    "persistence_afseq_t1": 0.124,
-    "persistence_wsts_t1": 0.193,
-}

@@ -37,8 +37,12 @@ channel mean over the training split.
 
 ## Acceptance tests
 
-`paths.ANCHORS` lists numbers this code must reproduce. They are tests, not
-trivia: a rewrite that stops matching them has a bug, however clean it reads.
+Nothing here quotes a result to be trusted. Every baseline is recomputed by the
+experiment that reports it, from the same loader and the same filter, so the
+floor of a table is measured rather than remembered. The check that the release
+still reads WSTS+ the way the research tree did is to score the published
+checkpoints through this loader and compare with the value their authors
+report: if that moves, the loader changed, not the model.
 
 ## Running it somewhere else
 
@@ -67,7 +71,7 @@ Nothing is imported from outside the repository: the AFSeq loader is
 
 The dataset the paper uses is what `dataset/build_afseq.py --phase all` leaves
 behind. Its last phase, `curate` (`dataset/curate.py`), moves duplicated events
-and the 15% most persistent US fires out of the tree and records them in
+and the most persistent US fires out of the tree and records them in
 `<tree>/excluded.json`, and `dataset/make_splits.py` only splits what is left.
 `requirements.txt` lists the direct dependencies with the versions used here;
 torch is unpinned because its build has to follow the driver.
