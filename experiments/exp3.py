@@ -110,7 +110,7 @@ def matrix(out: Path, seeds, ks=KS, modes=MODES) -> list[Job]:
                             log=out / "logs" / f"{tag}.log", cwd=ROOT,
                             output=out / f"{tag}.json",
                             env={"AFSEQ_SPLITS":
-                                 str(SPLIT_DIR / f"splits_v7_s{seed}.txt")}))
+                                 str(SPLIT_DIR / f"splits_s{seed}.txt")}))
     return jobs
 
 
@@ -218,7 +218,7 @@ def horizons(out: Path, seeds, ks=KS, modes=MODES, workers=4, batch_size=4):
     sys.path.insert(0, str(ROOT / "training"))
     from train import build_model
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    loaders = {s: _test_loader(str(SPLIT_DIR / f"splits_v7_s{s}.txt"), workers,
+    loaders = {s: _test_loader(str(SPLIT_DIR / f"splits_s{s}.txt"), workers,
                                batch_size) for s in seeds}
     res = {}
     for mode, k in configs(ks, modes):

@@ -37,9 +37,9 @@ WSTS_HDF5 = _p("WSTS_HDF5", DATA / "wstsplus" / "hdf5")
 
 # --- splits and dataset constants shipped WITH the code ---------------------
 SPLITS_DIR = _p("AFSEQ_SPLITS_DIR", ROOT / "dataset" / "splits")
-AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_v7_s23.txt")
+AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_s23.txt")
 # per-channel TRAIN means used to impute holes (dataset/afseq_loader.py)
-CHANNEL_MEANS = _p("AFSEQ_CHANNEL_MEANS", ROOT / "dataset" / "channel_means_v7.json")
+CHANNEL_MEANS = _p("AFSEQ_CHANNEL_MEANS", ROOT / "dataset" / "channel_means.json")
 
 # --- outputs --------------------------------------------------------------
 RUNS = _p("RUNS_DIR", ROOT.parent / "runs")
@@ -59,7 +59,7 @@ ANCHORS = {
     "utae_ar_veg_wstsplus_4fold_crop128": 0.4295,   # paper Table 3: 0.429
     "utae_ar_afseq_t1": 0.432,                      # 3-seed mean
     # 0.124 +- 0.013 (3 seeds; s5/s7/s23 = 0.1196/0.1136/0.1387):
-    # exp2.py --table --rows persistence on dataset_v7 (256-px windows, 10 km
+    # exp2.py --table --rows persistence on the AFSeq tree (256-px windows, 10 km
     # margin, 128-px fire-centred patch, 34 channels, 1,194 events after
     # build_afseq --phase curate). With all 1,301 events on the old contour
     # windows and 64-px patches it was 0.252.

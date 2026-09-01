@@ -2,7 +2,7 @@
 """The AFSeq splits: three seeds, stratified by region, fires as the unit.
 
     python dataset/make_splits.py --seeds 5 7 23
-    -> dataset/splits/splits_v7_s{seed}.txt          (what ships with the repo)
+    -> dataset/splits/splits_s{seed}.txt          (what ships with the repo)
 
 Splits whatever the dataset tree contains. What is NOT in the tree is decided
 upstream by `build_afseq.py --phase curate` (dataset/curate.py): duplicated
@@ -16,13 +16,13 @@ of the same region until the test's estimated persistence AP sits in the
 window, keeping every region's share of fires, sampled days and burned pixels
 within `--tol`. It exists for benchmark studies (what if the test floor were
 X?) and is not what produced the shipped splits. Persistence of the shipped
-splits, measured with exp2.py --table --rows persistence: 0.124 +- 0.013 (dataset_v7).
+splits, measured with exp2.py --table --rows persistence: 0.124 +- 0.013.
 
 `--holdout REGION [REGION ...]` writes leave-one-region-out splits instead
 (experiments/exp6.py): Test = EVERY event of that region, Train/Val = the other
 regions, split at random with the same train:val ratio as the shipped splits
 (70:15) and the same RNG discipline (ids sorted before shuffling, one RNG per
-seed). Nothing is pinned. -> splits_<tag>_loro_<slug>.txt, slug in REGION_SLUG.
+seed). Nothing is pinned. -> splits_loro_<slug>.txt, slug in REGION_SLUG.
 """
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def build(stats, seed, lo, hi, tol, also_val):
 
 # file-name slug of each region label of dataset/curate.py:region_of. "Chile"
 # is the label the curation gives the WHOLE southern hemisphere (Chile,
-# Argentina, Bolivia; 59 / 254 / 140 events in v7): the slug says so.
+# Argentina, Bolivia; 59 / 254 / 140 events): the slug says so.
 REGION_SLUG = {"Chile": "southam", "US": "us", "S.Europe": "seurope"}
 
 
@@ -194,8 +194,8 @@ def main():
     ap.add_argument("--tol", type=float, default=0.15,
                     help="desvio relativo permitido por region y magnitud al fijar")
     ap.add_argument("--also-val", action="store_true")
-    ap.add_argument("--tag", default="v7")
-    ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats_v7.json",
+    ap.add_argument("--tag", default="")
+    ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats.json",
                     help="cache de las estadisticas por evento (se recalcula si falta)")
     ap.add_argument("--no-write", action="store_true", help="solo estimar")
     ap.add_argument("--holdout", nargs="+", metavar="REGION", default=None,
@@ -218,7 +218,9 @@ def main():
         seed = a.seeds[0]
         for region in a.holdout:
             sp = build_holdout(stats, region, seed)
-            p = SPLIT_DIR / f"splits_{a.tag}_loro_{REGION_SLUG[region]}.txt"
+            slug = REGION_SLUG[region]
+            p = SPLIT_DIR / (f"splits_{a.tag}_loro_{slug}.txt" if a.tag
+                             else f"splits_loro_{slug}.txt")
             if not a.no_write:
                 p.write_text("\n".join(["Train"] + sp["train"] + ["", "Val"] + sp["val"]
                                        + ["", "Test"] + sp["test"]) + "\n")
@@ -229,7 +231,8 @@ def main():
     lo, hi = a.target if a.target else (None, None)
     for seed in a.seeds:
         sp = build(stats, seed, lo, hi, a.tol, a.also_val)
-        p = SPLIT_DIR / f"splits_{a.tag}_s{seed}.txt"
+        p = SPLIT_DIR / (f"splits_{a.tag}_s{seed}.txt" if a.tag
+                         else f"splits_s{seed}.txt")
         if not a.no_write:
             p.write_text("\n".join(["Train"] + sp["train"] + ["", "Val"] + sp["val"]
                                    + ["", "Test"] + sp["test"]) + "\n")

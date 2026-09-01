@@ -14,7 +14,7 @@ on), Test on every event of the third. Three regions x 2 models x 1 seed.
 
 THE REGIONS are the ones dataset/curate.py assigns from the event centroid:
 "Chile" is its label for the whole southern hemisphere (Chile 59, Argentina
-254, Bolivia 140 events in v7), "US" (422) and "S.Europe" (319). Chile alone
+254, Bolivia 140 events), "US" (422) and "S.Europe" (319). Chile alone
 would be too small a test set (59 fires), so it stays inside its region.
 
 THE TABLE, one block per held-out region:
@@ -67,11 +67,11 @@ MODELS = ("utae_ar", "utae_res18")            # ours, and their best
 ROWS = ("persistence",) + MODELS
 SEED = 23                                     # training seed; exp2's default
 EXP2_SEEDS = exp2.SPLITS                      # the reference's splits
-STATS = SPLITS_DIR / "fire_stats_v7.json"     # region of every event, shipped
+STATS = SPLITS_DIR / "fire_stats.json"     # region of every event, shipped
 
 
 def split_file(region: str) -> Path:
-    return SPLITS_DIR / f"splits_v7_loro_{REGION_SLUG[region]}.txt"
+    return SPLITS_DIR / f"splits_loro_{REGION_SLUG[region]}.txt"
 
 
 def region_of() -> dict:
@@ -179,7 +179,7 @@ def table(out: Path, exp2_out: Path, regions=REGIONS, rows=ROWS, workers=4,
                 model = exp2.load_model(name, exp2_out, s, dev)
                 if model is None:
                     continue
-                ids = [i for i in load_ids("Test", SPLITS_DIR / f"splits_v7_s{s}.txt")
+                ids = [i for i in load_ids("Test", SPLITS_DIR / f"splits_s{s}.txt")
                        if reg[i] == region]
                 ref[s] = _score_one(name, model, loader_for(ids, batch_size, workers), dev)
                 ref[s]["n_fires"] = len(ids)

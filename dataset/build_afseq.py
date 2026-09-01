@@ -394,7 +394,7 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
 
     2026-08-25: the first version of this function wrote elevation alone and
     the vegetation in the order [NDVI, EVI, landcover, ET], averaged over the
-    whole collection. Nothing caught it until dataset_v7 was the first tree
+    whole collection. Nothing caught it until this was the first tree
     built entirely by this file: every day failed to unpack the DEM and the
     fire channel came out empty. The band order is now asserted at write time.
     No fallback: if a product has nothing for this footprint the event is
@@ -481,7 +481,7 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
         # MCD12Q1 is annual and its last image is dated 2024-01-01: for an
         # event starting after 2026-01-31 the two-year window opens after it
         # and matches nothing, and ee.Image.cat would silently drop the band
-        # (76 events of 2026 in dataset_v7). Same rule the expansion campaign
+        # (76 events of 2026 in the tree). Same rule the expansion campaign
         # used: fall back to the two most recent images (mode of the two).
         if retry(lambda: mcd12.size().getInfo()) == 0:
             mcd12 = (ee.ImageCollection("MODIS/061/MCD12Q1").filterBounds(region)
@@ -655,7 +655,7 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
                          min_px: int = MIN_PX, inherit: bool = True):
     """Same skeleton, but from an existing tree: its ids, contours and the
     days it actually has (not start/end: holes stay holes). This is how the
-    1,194 events of dataset_v6 were re-downloaded into dataset_v7."""
+    1,194 events were re-downloaded into a fresh tree."""
     made = 0
     for edir in sorted(p for p in Path(src).iterdir()
                        if p.is_dir() and p.name.startswith("id_")):

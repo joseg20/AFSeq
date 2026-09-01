@@ -3,7 +3,7 @@
 
     python dataset/channel_stats.py [--days 3000] [--splits <file>]
 
-  dataset/channel_means_<tag>.json      NaN-aware mean of every channel BEFORE
+  dataset/channel_means.json            NaN-aware mean of every channel BEFORE
                                         imputation: what impute_missing writes
                                         into a hole (paths.CHANNEL_MEANS).
   experiments/exp4/afseq_channel_stats.json
@@ -36,7 +36,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--days", type=int, default=3000)
     ap.add_argument("--splits", default=str(AFSEQ_SPLITS))
-    ap.add_argument("--tag", default="v7")
+    ap.add_argument("--tag", default="")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
 
@@ -71,7 +71,8 @@ def main():
     mean_raw = raw_sum / np.maximum(raw_n, 1)
     mean = s1 / n; std = np.sqrt(np.maximum(s2 / n - mean ** 2, 0))
 
-    out1 = ROOT / "dataset" / f"channel_means_{a.tag}.json"
+    out1 = ROOT / "dataset" / (f"channel_means_{a.tag}.json" if a.tag
+                              else "channel_means.json")
     out1.write_text(json.dumps(dict(
         source=str(AFSEQ), split="train", n_days=len(days), seed=a.seed,
         note="per-channel mean over TRAIN, NaN ignored, BEFORE imputation; "

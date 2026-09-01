@@ -30,7 +30,7 @@ day's active-fire.tif (SNPP + NOAA-20 detections of that day, 0 elsewhere),
 every band min-max normalised into [0, 1] with the fixed
 ranges below. A hole is NaN on disk (dataset/build_afseq.py never writes a
 plausible constant) and is imputed here with the channel's TRAIN mean
-(dataset/channel_means_v5.json): 0 would be the bottom of every range. The
+(dataset/channel_means.json): 0 would be the bottom of every range. The
 normalised zero of reflectance is 0.006211, not 0.
 
 If AFSEQ_CACHE is set, dataset/afseq_cache.py swaps `get_features` and
@@ -77,16 +77,17 @@ FIRE_CHANNEL = CHANNELS.index("fire")        # 33, always last
 N_COVARIATES = N_CHANNELS - 1                # what fut_covars carries
 N_STATIC = 3 + LANDCOVER_CLASSES + 3         # terrain + land cover + NDVI/EVI/ET: constant per event
 # THE PATCH: what the model sees per sample, in pixels of the 200 m grid
-# (128 px = 25.6 km). Fixed on 2026-08-25: with the v7 windows, 48% of the
+# (128 px = 25.6 km). With windows cut to the contour, 48% of the
 # fire days have a day-t front larger than 64 px and those days hold 81% of
 # the fire pixels; a 64-px patch saw half of the day's fire. 128 is also the
 # crop WSTS/WSTS+ train and evaluate on.
 PATCH = 128
-# AFSEQ_CROP selects the crop of the 128-px patch. "v8" (the default here) takes
-# the patch with the MOST day-t fire when the front is wider than the patch;
-# "v7" always centres on the bounding box. See fire_centred_crop. The tables of
-# the paper were produced with v7, which this flag reproduces exactly.
-CROP_MODE = os.environ.get("AFSEQ_CROP", "v8")
+# AFSEQ_CROP picks how the 128-px patch is placed. "maxfire", the default,
+# takes the patch holding the most day-t fire whenever the front is wider than
+# the patch; "centred" always centres on the bounding box of that front and is
+# the sampling the tables of the paper were produced with. See
+# fire_centred_crop for what the two do and why they differ only there.
+CROP_MODE = os.environ.get("AFSEQ_CROP", "maxfire")
 # Optional extra channel, NOT in CHANNELS: the hour of detection (UTC, 0-23,
 # 0 = no fire) carried as band 2 of active-fire.tif. Only the cross-benchmark
 # fusion asks for it (Seq2SeqActivePadded(with_fire_hour=True)), to fill the
@@ -468,16 +469,17 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
         return random.randint(0, tH - ph), random.randint(0, tW - ph)
     bh = int(ys.max()) - int(ys.min()) + 1
     bw = int(xs.max()) - int(xs.min()) + 1
-    if CROP_MODE == "v8" and (bh > ph or bw > ph):
-        # v8: a front wider than the patch can be BIMODAL -- clusters at both
-        # ends of the bounding box and nothing in the middle -- and the
-        # bbox-centre then holds zero fire (7% of v7 samples, all splits;
-        # id_0065 2025-03-08 is the measured example: 121 px of fire, none in
-        # the crop). Take instead the patch with the MOST day-t fire, found
-        # exactly with an integral image. Deterministic: ties break at the
-        # first argmax, and the two RNG draws v7 makes here are consumed with
-        # zero-width jitter (a wide front leaves no jitter room in v7 either),
-        # so every sample whose front FITS the patch is bit-identical to v7.
+    if CROP_MODE == "maxfire" and (bh > ph or bw > ph):
+        # A front wider than the patch can be bimodal, with clusters at both
+        # ends of the bounding box and nothing in the middle, and the centre of
+        # that box then holds zero fire. It happens in 7% of the samples across
+        # all splits; id_0065 2025-03-08 is the measured example, 121 px of fire
+        # on the raster and none in the crop. Take instead the patch with the
+        # most day-t fire, found exactly with an integral image. Deterministic:
+        # ties break at the first argmax, and the two RNG draws the centred crop
+        # makes here are consumed with zero-width jitter (a wide front leaves no
+        # jitter room there either), so every sample whose front fits the patch
+        # is bit-identical between the two modes.
         m = mask_t
         if m.shape[0] < tH or m.shape[1] < tW:
             m = np.pad(m, ((0, tH - m.shape[0]), (0, tW - m.shape[1])))
@@ -488,7 +490,7 @@ def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
         S = ii[ph:ph + Hh, ph:ph + Ww] - ii[:Hh, ph:ph + Ww] \
             - ii[ph:ph + Hh, :Ww] + ii[:Hh, :Ww]
         k = int(np.argmax(S))
-        random.randint(0, 0)               # keep the two-draw contract of v7
+        random.randint(0, 0)               # same two-draw contract as centred
         random.randint(0, 0)
         return k // Ww, k % Ww
     cy = (int(ys.min()) + int(ys.max())) // 2

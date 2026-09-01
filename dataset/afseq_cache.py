@@ -22,7 +22,7 @@ WHAT IT STORES. Exactly what the loader would have computed, once:
 A day that get_features answers with None (no active-fire mask the next day, a
 missing static layer, an exception it swallows) is simply absent, and the
 cached call answers None too. Static channels (terrain, land cover, NDVI/EVI/ET: 23 of 34) are stored
-once per event; dataset_v7 comes to ~13 GB instead of 40.
+once per event; the AFSeq tree comes to ~13 GB instead of 40.
 
 HOW IT PLUGS IN. `install(module)` replaces `get_features` and `load_raster`
 in the namespace of dataset/afseq_loader.py with lookups into the cache. Nothing
@@ -236,7 +236,7 @@ def main():
     ap.add_argument("--procs", type=int, default=4)
     ap.add_argument("--check", type=int, metavar="N",
                     help="comparar N muestras por seccion, raw vs cache")
-    ap.add_argument("--splits", default=str(SPLITS_DIR / "splits_v7_s7.txt"))
+    ap.add_argument("--splits", default=str(SPLITS_DIR / "splits_s7.txt"))
     ap.add_argument("--cache", type=Path, default=AFSEQ_CACHE)
     a = ap.parse_args()
     if a.build:

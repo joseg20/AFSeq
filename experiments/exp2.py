@@ -46,7 +46,7 @@ come back silently.
 
 PERSISTENCE is computed here too, from the same loader and the same filter, so
 the floor of the table is measured rather than quoted: 0.124 +- 0.013 on the
-v7 splits (1,194 events, 128-px patches; dataset/curate.py says which 33 duplicates and 74 US
+shipped splits (1,194 events, 128-px patches; dataset/curate.py says which 33 duplicates and 74 US
 fires the build leaves out, and why). With every event on the old contour
 windows it was 0.252, and the 0.198
 of an earlier draft was a test set that no longer exists. What this prints is
@@ -79,6 +79,11 @@ OURS = ("unet", "convnext", "convlstm", "utae", "utae_ar", "utae_ar4")
 THEIRS = ("utae_res18",)
 SPLITS = (5, 7, 23)
 SPLIT_DIR = SPLITS_DIR                 # dataset/splits, shipped with the code
+
+
+def split_name(tag: str, seed) -> str:
+    """splits_s<seed>.txt, or splits_<tag>_s<seed>.txt for an alternative set."""
+    return f"splits_{tag}_s{seed}.txt" if tag else f"splits_s{seed}.txt"
 EPOCHS = 20
 LOSS = "bce_dice"
 LR = 1e-3
@@ -100,7 +105,7 @@ def tag_of(model: str, seed: int) -> str:
     return tag + "_padfix"
 
 
-def matrix(out: Path, splits: str = "v7") -> list[Job]:
+def matrix(out: Path, splits: str = "") -> list[Job]:
     jobs = []
     for model in OURS:
         for seed in SPLITS:
@@ -115,7 +120,7 @@ def matrix(out: Path, splits: str = "v7") -> list[Job]:
                 log=out / "logs" / f"{model}_s{seed}.log",
                 cwd=ROOT,
                 output=out / model / f"{tag}.json",
-                env={"AFSEQ_SPLITS": str(SPLIT_DIR / f"splits_{splits}_s{seed}.txt")}))
+                env={"AFSEQ_SPLITS": str(SPLIT_DIR / split_name(splits, seed))}))
     for model in THEIRS:
         for seed in SPLITS:
             jobs.append(Job(
@@ -128,7 +133,7 @@ def matrix(out: Path, splits: str = "v7") -> list[Job]:
                 log=out / "logs" / f"{model}_s{seed}.log",
                 cwd=ROOT / "benchmarks",
                 output=out / model / f"{model}_all_Tvar_s{seed}.json",
-                env={"AFSEQ_SPLITS": str(SPLIT_DIR / f"splits_{splits}_s{seed}.txt")}))
+                env={"AFSEQ_SPLITS": str(SPLIT_DIR / split_name(splits, seed))}))
     return jobs
 
 
@@ -219,9 +224,9 @@ def load_model(name, runs, seed, dev):
     return m.to(dev).eval()
 
 
-def table(runs: Path, seeds, rows=ROWS, workers=4, batch_size=4, splits="v7"):
+def table(runs: Path, seeds, rows=ROWS, workers=4, batch_size=4, splits=""):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    loaders = {s: afseq_loader(str(SPLIT_DIR / f"splits_{splits}_s{s}.txt"),
+    loaders = {s: afseq_loader(str(SPLIT_DIR / split_name(splits, s)),
                                batch_size=batch_size, workers=workers)
                for s in seeds}
     res = {}
@@ -272,9 +277,10 @@ def main():
                          "cambia la AP de un modelo con el relleno")
     ap.add_argument("--out", type=Path, default=RUNS / "tabla2")
     ap.add_argument("--json", type=Path, default=None)
-    ap.add_argument("--splits", default="v7",
-                    help="que splits_<tag>_s<seed>.txt entrenar/puntuar, buscado en "
-                         "AFSEQ_SPLITS_DIR (dataset/splits: solo v7, el dataset "
+    ap.add_argument("--splits", default="",
+                    help="sufijo opcional: splits_<tag>_s<seed>.txt en vez de "
+                         "splits_s<seed>.txt, buscado en "
+                         "AFSEQ_SPLITS_DIR (dataset/splits trae los del "
                          "final). Con otro tag usa tambien otro --out")
     a = ap.parse_args()
 

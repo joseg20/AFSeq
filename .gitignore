@@ -14,3 +14,18 @@ wandb/
 *.png
 *.pdf
 *.npz
+
+# Figure and supplementary-material scripts: they live outside this repo, which
+# ships the models, the training, the evaluation and the dataset builder only.
+experiments/exp5/
+experiments/fig_*.py
+experiments/supp_*.py
+experiments/loro_*.py
+experiments/full_regions.py
+experiments/afseq_terciles.py
+experiments/wsts_sizes.py
+experiments/exp1_score.py
+experiments/exp4/fig_*.py
+experiments/exp4/persist_horizons.py
+experiments/exp4/rollout_res18.py
+experiments/exp4/scar_t5.py

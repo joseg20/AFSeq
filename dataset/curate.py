@@ -10,7 +10,7 @@ what is left. Two rules, both decided on 2026-08-25 with the numbers below:
 
 1. DUPLICATED EVENTS. Two ids with the same footprint, raster shape and the
    exact list of mask dates are the same fire twice (the expansion campaign
-   re-downloaded events that already existed: 33 pairs in dataset_v6, 25 of
+   re-downloaded events that already existed: 33 pairs, 25 of
    them with a byte-identical climate.tif). The lower id stays. Left in, they
    land on different sides of a split: 14-18 of the 33 pairs did, i.e. the
    same fire in train and test.

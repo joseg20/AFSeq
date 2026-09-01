@@ -19,10 +19,10 @@ export RUNS_DIR=/path/to/runs
 # Your own Earth Engine cloud project. Only dataset/build_afseq.py needs it.
 export EE_PROJECT=your-ee-project
 
-# Crop of the 128-px patch: "v8" (default) takes the patch holding the most
-# day-t fire when the front is wider than the patch; "v7" always centres on the
-# bounding box and is what the published tables were produced with.
-# export AFSEQ_CROP=v7
+# How the 128-px patch is placed: "maxfire" (default) takes the patch holding
+# the most day-t fire when the front is wider than the patch; "centred" always
+# centres on the bounding box, which is what the published tables used.
+# export AFSEQ_CROP=centred
 
 # Future-covariate contract: "era" (reanalysis, the default), "gfs_fcst" (the
 # forecast available at run time) or "gfs_anl" (the GFS analysis).

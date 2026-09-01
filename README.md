@@ -53,7 +53,7 @@ environment, with defaults relative to the repository:
 `WSP_DATA` moves `data/` as a whole. `env/example.sh` is the template: copy it,
 edit the four directories and `source` it before launching. Splits, channel
 means and the fusion statistics ship inside the repo, in `dataset/splits`,
-`dataset/channel_means_v7.json` and `experiments/exp4/afseq_channel_stats.json`.
+`dataset/channel_means.json` and `experiments/exp4/afseq_channel_stats.json`.
 
 Each event day holds `active-fire.tif` (the daily VIIRS active-fire mask, which
 is both the target and the fire channel), `climate.tif` with seven bands and
@@ -77,7 +77,7 @@ and exp3. exp1, exp4 and exp7 also need the WSTS+ HDF5 (92 GB), and exp4's
 UTAE-AR on WSTS+ needs the four published `best_AR_Veg_p4f{0-3}` checkpoints
 (82 MB).
 
-## The crop: AFSEQ_CROP
+## Placing the patch: AFSEQ_CROP
 
 The loader trains and scores on a 128-px patch centred on the day-t fire. When
 the front is wider than the patch, its bounding box can be bimodal, with two
@@ -86,12 +86,12 @@ holds no fire at all. That happens in 7.1% of train, 6.5% of val and 7.9% of
 test samples, and those rollouts start from an empty feedback mask and score
 near zero.
 
-`AFSEQ_CROP=v8`, the default here, takes instead the patch with the most day-t
+`AFSEQ_CROP=maxfire`, the default here, takes instead the patch with the most day-t
 fire, found exactly with an integral image and deterministically. It consumes
 the same two draws of `random` that the centred crop does, so every sample
 whose front fits inside the patch is bit-identical between the two modes and
-only the wide fronts move. `AFSEQ_CROP=v7` restores the centred crop, which is
-the sampling the tables of the paper were produced with.
+only the wide fronts move. `AFSEQ_CROP=centred` restores the centred crop,
+which is the sampling the tables of the paper were produced with.
 
 ## AFSeq: the dataset the paper uses
 
