@@ -15,11 +15,6 @@ Five directories, one job each. Nothing imports across them except through
                   vendored under its own licence, plus the bridges that let it
                   read AFSeq and that let our models read theirs
 
-There is one implementation of the metric, shared by every experiment, and it
-is not meant to be reimplemented per experiment: scoring the whole scene
-instead of the crop moves the score of a model by more than the gaps the
-tables are trying to resolve.
-
 ## Licence
 
 This repository is CC BY 4.0 (`LICENSE`). The one exception is
@@ -34,15 +29,6 @@ A missing measurement is written as NaN and recorded in `provenance.json`. It
 is never replaced by a plausible constant, which would read as a real
 measurement once written. Imputation happens at load time instead, with the
 channel mean over the training split.
-
-## Acceptance tests
-
-Nothing here quotes a result to be trusted. Every baseline is recomputed by the
-experiment that reports it, from the same loader and the same filter, so the
-floor of a table is measured rather than remembered. The check that the release
-still reads WSTS+ the way the research tree did is to score the published
-checkpoints through this loader and compare with the value their authors
-report: if that moves, the loader changed, not the model.
 
 ## Running it somewhere else
 
