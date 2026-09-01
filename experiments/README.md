@@ -13,8 +13,9 @@ to launch them, and knows how to score them:
 | `exp2.py` | the architecture table on AFSeq: 6 architectures x 3 splits, plus persistence |
 | `exp3.py` | the teacher-forcing schedule ablation for UTAE-AR on AFSeq |
 | `exp4/` | the cross-benchmark table on the AFSeq+WSTS+ fusion (Veg space), plus the native WSTS+ baseline |
-| `exp5/` | the two-panel UMAP figure, from the encoder `exp4/native.py` trains |
 | `exp6.py` | supplementary: leave-one-region-out on AFSeq (S.America / US / S.Europe), UTAE-AR and UTAE-Res18, against exp2's checkpoints on the same fires |
+| `exp7.py` | UTAE-AR on the ORIGINAL WSTS, 12-fold protocol; `exp7_score.py` scores it |
+| `exp1_score_fixed.py` | test AP per fold of the published UTAE-AR anchors, the three feature sets |
 | `runner.py` | the shared job runner: lanes, one GPU, resumable, hard CPU ceiling |
 
 `--only SUBSTR...` restricts `--launch` to the jobs whose name contains one of
@@ -39,7 +40,7 @@ to a number is now here.
   256 threads otherwise. We were twice asked to use fewer cores.
 - **Set `AFSEQ_CACHE`** for anything that trains on AFSeq. Without it a run is a
   GDAL benchmark: 186 ms per sample, 89% inside rasterio, 57 `.tif` opens per
-  sample, ~4 min per epoch with 4 workers and the GPU at 0-40% -- and that is
+  sample, about 4 min per epoch with 4 workers and the GPU at 0-40%, and that is
   with the whole dataset in the page cache (iowait 0; the disk was never the
   problem). `dataset/afseq_cache.py --build` decodes it once (4.6 GB, one
   minute); `--check` proves the outputs are `np.array_equal` to the raw loader
@@ -54,5 +55,5 @@ to a number is now here.
 `--table` never retrains. It loads the checkpoints `training/train.py` wrote and
 scores them under one protocol stated at the top of each file. `exp2.py` also
 re-checks, for every model as it scores it, that appending padded frames does
-not change its output -- four of the five architectures once failed that, and
+not change its output. Four of the five architectures once failed that, and
 the table rows measured something other than what they claimed.

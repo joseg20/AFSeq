@@ -52,15 +52,15 @@ one — the opposite of what their paper describes. We do not correct it: their
 published numbers come from this code, and the question these tables ask is how
 *their* model transfers, not how a fixed version would.
 
-## Getting WSTS+ (only exp1, exp4 and exp5 need it)
+## Getting WSTS+ (only exp1, exp4 and exp7 need it)
 
-1. `benchmarks/download_wstsplus.sh <dir>` -- Zenodo record 17584629,
+1. `benchmarks/download_wstsplus.sh <dir>` downloads Zenodo record 17584629,
    WSTSPlus.zip, 19.9 GB, md5 42da7598cc33a170064e78d8027148c9. Resumable by
    an external loop on purpose: `curl --retry` together with `-C -` truncates
    the file and restarts from zero (that is how 6 GiB were lost once).
 2. `unzip` it; the tree is `<year>/<fire>/*.tif`, 23 bands, no CRS.
 3. `benchmarks/make_wsts_hdf5.py --data_dir <unzipped> --target_dir $WSTS_HDF5
-   --years 2016 2017 2018 2019 2020 2021 2022 2023` -- their
+   --years 2016 2017 2018 2019 2020 2021 2022 2023`, which is their
    CreateHDF5Dataset.py with the years unpinned and two fixes (no CRS, no torch
    import); 92 GB, `<year>/<fire>.hdf5` with a `data` dataset of
    (days, 23, H, W). `wstsplus_data.py` reads exactly that.
