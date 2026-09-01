@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The AFSeq splits: three seeds, stratified by region, fires as the unit.
 
     python dataset/make_splits.py --seeds 5 7 23
@@ -76,7 +75,7 @@ def pin(stats, target_set: list, pool: list, ref, lo, hi, tol, rng,
         # extreme in the pool, same region, tried in order
         outs = sorted(target_set, key=lambda f: overlap(stats, f),
                       reverse=going_down)
-        # a swap may not push the imbalance above tol -- or above where it
+        # a swap may not push the imbalance above tol, or above where it
         # already is, so an unbalanced start can only get better
         cap = max(tol, imbalance(stats, target_set, ref))
         moved = False
@@ -96,7 +95,7 @@ def pin(stats, target_set: list, pool: list, ref, lo, hi, tol, rng,
             if moved:
                 break
         if not moved:
-            print(f"    sin swaps que mejoren: se queda en AP~{ap:.3f} "
+            print(f"    no swap improves it: staying at AP~{ap:.3f} "
                   f"(objetivo [{lo},{hi}], tol {tol})")
             return ap, it
     return ap_of(stats, target_set), max_iter
@@ -197,9 +196,9 @@ def main():
     ap.add_argument("--tag", default="")
     ap.add_argument("--stats", type=Path, default=SPLIT_DIR / "fire_stats.json",
                     help="cache de las estadisticas por evento (se recalcula si falta)")
-    ap.add_argument("--no-write", action="store_true", help="solo estimar")
+    ap.add_argument("--no-write", action="store_true", help="estimate only")
     ap.add_argument("--holdout", nargs="+", metavar="REGION", default=None,
-                    help="leave-one-region-out: Test = toda la region, Train/Val = "
+                    help="leave-one-region-out: Test = the whole region, Train/Val = "
                          "el resto. Regiones: "
                          + ", ".join(sorted(REGION_SLUG)))
     a = ap.parse_args()

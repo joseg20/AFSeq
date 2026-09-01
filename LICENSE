@@ -3,7 +3,7 @@ International License (CC BY 4.0). The full legal code follows.
 
     https://creativecommons.org/licenses/by/4.0/
 
-EXCEPTION -- third-party code. `benchmarks/wsts+/` is a vendored copy of
+EXCEPTION, third-party code. `benchmarks/wsts+/` is a vendored copy of
 WildfireSpreadTS (https://github.com/slahrichi/WildfireSpreadTS), which carries
 its own MIT licence in `benchmarks/wsts+/LICENSE` and is NOT covered by the
 licence below. See `benchmarks/wsts+/UPSTREAM.txt` for the vendored commit and

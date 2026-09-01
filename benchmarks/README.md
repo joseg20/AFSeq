@@ -1,4 +1,4 @@
-# benchmarks/ — third-party code
+# benchmarks/: third-party code
 
 ## wsts+/
 
@@ -37,7 +37,7 @@ sets.
 
 `cfgs/unet/res18_monotemporal.yaml` states in its first line that it "contains
 best parameters determined in grid search", so their tuned configuration is
-what ships — no grid search of ours is involved:
+what ships, and no grid search of ours is involved:
 
     AdamW, lr 1e-3, Focal loss, pos_class_weight 236,
     resnet18 encoder pretrained on ImageNet, seed 0, 10000 steps
@@ -48,7 +48,7 @@ what ships — no grid search of ours is involved:
 normalizes `pos_class_weight` and then passes `alpha = 1 - weight`, which makes
 alpha 0.0042 instead of 0.9958. In torchvision alpha weights the POSITIVE
 class, so their Focal penalizes a fire mistake ~236x less than a background
-one — the opposite of what their paper describes. We do not correct it: their
+one, the opposite of what their paper describes. We do not correct it: their
 published numbers come from this code, and the question these tables ask is how
 *their* model transfers, not how a fixed version would.
 

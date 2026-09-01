@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Curation of a built AFSeq tree: what leaves the dataset, and why.
 
     python dataset/build_afseq.py --out <tree> --phase curate      # normal way
@@ -82,7 +81,7 @@ def _masks(tree: Path, fid: str) -> dict:
     return out
 
 
-# ------------------------------------------------------------ rule 1: twins
+# rule 1: twins
 def duplicate_events(tree: Path) -> dict:
     """{duplicate id: original id}; same footprint, shape and mask dates."""
     groups = {}
@@ -97,7 +96,7 @@ def duplicate_events(tree: Path) -> dict:
     return {d: ids[0] for ids in groups.values() for d in ids[1:]}
 
 
-# ------------------------------------------------- rule 2: slow US fronts
+# rule 2: slow US fronts
 def fire_stats(tree: Path, fids=None, patch: int = 128, crops: int = 4) -> dict:
     """Per event: TP/FP/FN/P/N of "tomorrow = today", days, burned, region.
 
@@ -165,12 +164,12 @@ def persistence_ap(stats: dict, fids) -> float:
     return r1 * p1 + (1 - r1) * s["P"] / max(s["N"], 1)
 
 
-# ---------------------------------------------------------------- driver
+# driver
 def curate(tree: Path, drop: dict = DROP_DEFAULT, dry_run: bool = False,
            force: bool = False) -> dict:
     tree = Path(tree)
     if (tree / "excluded.json").exists() and not force and not dry_run:
-        print(f"{tree} ya esta curado ({tree / 'excluded.json'}); --force para repetir")
+        print(f"{tree} is already curated ({tree / 'excluded.json'}); use --force to redo it")
         return json.loads((tree / "excluded.json").read_text())
     before = events_of(tree)
     dups = duplicate_events(tree)
@@ -211,7 +210,7 @@ def curate(tree: Path, drop: dict = DROP_DEFAULT, dry_run: bool = False,
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--out", type=Path, default=AFSEQ, help="arbol del dataset")
+    ap.add_argument("--out", type=Path, default=AFSEQ, help="the dataset tree")
     ap.add_argument("--drop", nargs="+", metavar="REGION=FRAC",
                     default=[f"{k}={v}" for k, v in DROP_DEFAULT.items()])
     ap.add_argument("--dry-run", action="store_true")

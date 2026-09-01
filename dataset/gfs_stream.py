@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
-"""Pipeline GFS en streaming: descarga una fecha, extrae los eventos que la
-usan y borra el GRIB. Nunca acumula mas de unos cientos de MB en disco.
+"""Streaming GFS pipeline: download one date, extract the events that use it,
+then delete the GRIB. It never holds more than a few hundred MB on disk.
 
-El archivo crudo pesaria ~32 GB y la cuota no da; lo que de verdad hace falta
-son los recortes por evento, que son ~6 KB por dia (la ventana de un incendio
-son unas pocas celdas de la malla de 0.25 grados).
+The raw archive would be about 32 GB. What is actually needed is the per-event
+crops, roughly 6 KB per day, because one fire window covers only a handful of
+cells of the 0.25 degree grid.
 
     python dataset/gfs_stream.py [--keep-grib] [--workers N]
 """
@@ -28,7 +27,7 @@ HOURS = sorted(set(DAILY) | set(PRECIP_HOURS))
 
 
 def day_map():
-    """fecha -> [eventos que la tienen como dia t]."""
+    """date -> [events that have it as their day t]."""
     m = defaultdict(list)
     for p in DATA.glob("id_*/*/active-fire.tif"):
         m[p.parent.name].append(p.parent.parent.name)
@@ -36,7 +35,7 @@ def day_map():
 
 
 def extract_one(args):
-    """Un evento, una fecha: recorte de los 7 canales en malla nativa."""
+    """One event on one date: the seven channels cropped on the native grid."""
     fid, date = args
     dst = OUT / fid / date / "gfs.npz"
     if dst.exists():
@@ -83,28 +82,28 @@ def main():
     dates = sorted(dm)
     if a.limit:
         dates = dates[:a.limit]
-    print(f"{len(dates)} fechas, {sum(len(v) for v in dm.values())} dias-evento", flush=True)
+    print(f"{len(dates)} dates, {sum(len(v) for v in dm.values())} event-days", flush=True)
 
     t0 = time.time()
     n_ev = n_fail = 0
     for i, date in enumerate(dates, 1):
         d8 = date.replace("-", "")
-        # 1. descargar lo que falte de esta fecha
+        # 1. download whatever is still missing for this date
         with ThreadPoolExecutor(max_workers=a.workers) as ex:
             list(ex.map(lambda h: grab(d8, h), HOURS))
-        # 2. extraer todos los eventos que la usan
+        # 2. extract every event that uses it
         jobs = [(fid, date) for fid in dm[date]]
         with ProcessPoolExecutor(max_workers=min(a.workers, 8)) as ex:
             for ok in ex.map(extract_one, jobs, chunksize=4):
                 n_ev += bool(ok); n_fail += (not ok)
-        # 3. tirar el GRIB
+        # 3. throw the GRIB away
         if not a.keep_grib:
             shutil.rmtree(GFS / d8, ignore_errors=True)
         if i % 25 == 0 or i == len(dates):
             el = (time.time() - t0) / 60
-            print(f"  {i}/{len(dates)} fechas  {el:.1f} min  "
-                  f"dias-evento ok={n_ev} fail={n_fail}", flush=True)
-    print(f"FIN ok={n_ev} fail={n_fail}", flush=True)
+            print(f"  {i}/{len(dates)} dates  {el:.1f} min  "
+                  f"event-days ok={n_ev} fail={n_fail}", flush=True)
+    print(f"done ok={n_ev} fail={n_fail}", flush=True)
 
 
 if __name__ == "__main__":

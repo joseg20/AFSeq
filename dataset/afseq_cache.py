@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """A decoded copy of AFSeq, so training is not a GDAL benchmark.
 
     python dataset/afseq_cache.py --build            # once, ~5 min
@@ -6,7 +5,8 @@
     AFSEQ_CACHE=/path/to/cache python experiments/afseq.py --launch
 
 WHY. Profiled on a training sample of Seq2SeqActivePadded (patch 64 then, history
-up to 16): 186 ms per sample, 89% of it inside load_raster -- 57 rasterio opens
+up to 16): 186 ms per sample, 89% of it inside load_raster, which is 57
+rasterio opens
 per sample, five .tif per day of history. The dataset is 843 MB and sits whole
 in the page cache, iowait is 0: the cost is decoding, not disk. With four
 workers that is 3 s per batch of 64 and ~4 min per epoch, GPU at 0-40%, and it
@@ -52,7 +52,7 @@ sys.path.insert(0, str(ROOT))
 from paths import AFSEQ, AFSEQ_CACHE, SPLITS_DIR  # noqa: E402
 
 
-# ------------------------------------------------------------------ building
+# building
 def _fire_dirs(afseq: Path) -> list[Path]:
     return sorted(p for p in afseq.iterdir() if p.is_dir())
 
@@ -94,7 +94,7 @@ def _build_fire(args) -> tuple[str, int, int]:
         assert np.array_equal(X[:N_STATIC], static), f"{fid}/{day}: static changed"
         # dynamic channels as uint16: every channel is min-max normalised
         # into [0, 1] (the fire mask is 0/1), so 65535 levels give an error
-        # of at most 7.7e-6 -- and half the bytes of float32, which is what
+        # of at most 7.7e-6, and half the bytes of float32, which is what
         # lets a 256-px-window cache fit next to the dataset.
         dyn = X[N_STATIC:]
         assert dyn.min() >= 0.0 and dyn.max() <= 1.0, f"{fid}/{day}: dynamic out of [0,1]"
@@ -109,8 +109,8 @@ def build(afseq: Path = AFSEQ, cache: Path = AFSEQ_CACHE, procs: int = 4,
     cache.mkdir(parents=True, exist_ok=True)
     fids = [p.name for p in _fire_dirs(afseq)]
     todo = [f for f in fids if force or not (cache / f / "DONE").exists()]
-    print(f"{len(fids)} fuegos, {len(fids) - len(todo)} ya en cache, "
-          f"{len(todo)} por decodificar -> {cache}")
+    print(f"{len(fids)} fires, {len(fids) - len(todo)} already cached, "
+          f"{len(todo)} left to decode -> {cache}")
     t0 = time.time()
     jobs = [(f, afseq, cache) for f in todo]
     written = missing = 0
@@ -119,13 +119,13 @@ def build(afseq: Path = AFSEQ, cache: Path = AFSEQ_CACHE, procs: int = 4,
             written += w
             missing += m
             if i % 100 == 0 or i == len(jobs):
-                print(f"  {i}/{len(jobs)}  {written} dias, {missing} None  "
+                print(f"  {i}/{len(jobs)}  {written} days, {missing} None  "
                       f"({time.time() - t0:.0f} s)", flush=True)
     size = sum(p.stat().st_size for p in cache.rglob("*.npy"))
     print(f"listo: {size / 1e9:.2f} GB en {time.time() - t0:.0f} s")
 
 
-# ---------------------------------------------------------------- installing
+# installing
 def missing_fires(cache: Path = AFSEQ_CACHE, afseq: Path = AFSEQ) -> list[str]:
     """Fires of `afseq` with no DONE marker in `cache`; empty means usable."""
     if not cache.is_dir():
@@ -160,7 +160,7 @@ def install(module, cache: Path = AFSEQ_CACHE, afseq: Path = AFSEQ):
         path = Path(path)                        # <fid>/<date>/active-fire.tif
         f = cache / path.parent.parent.name / "active" / (path.parent.name + ".npy")
         if not f.exists():
-            raise FileNotFoundError(f"{path} no esta en la cache ({f})")
+            raise FileNotFoundError(f"{path} is not in the cache ({f})")
         return np.load(f).astype(np.float32), None         # (bands, H, W)
 
     module.get_features = get_features
@@ -178,7 +178,7 @@ def install_if_configured(module) -> bool:
     return True
 
 
-# ------------------------------------------------------------------ checking
+# checking
 def check(n: int, splits_file, horizon: int = 5, patch=128, max_history=16):
     """np.array_equal on every output of `n` random samples per section.
 

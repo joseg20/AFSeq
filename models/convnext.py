@@ -1,4 +1,4 @@
-"""ConvNeXtUNet -- baseline of the architecture table.
+"""ConvNeXtUNet, a baseline of the architecture table.
 
 ConvNeXt-style U-Net on the last observed frame. The second static baseline,
 with a modern convolutional backbone.

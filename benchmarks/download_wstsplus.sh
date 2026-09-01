@@ -1,16 +1,17 @@
 #!/bin/bash
-# Movido al release el 25/08 (era ~/data/wstsplus/download.sh). Descarga
-# reanudable de WSTSPlus.zip; despues: unzip y benchmarks/make_wsts_hdf5.py.
-# WSTS+ (Lahrichi et al., WACV 2026) - Zenodo record 17584629, CC BY 4.0
+# Resumable download of WSTSPlus.zip. Afterwards: unzip, then
+# benchmarks/make_wsts_hdf5.py.
+# WSTS+ (Lahrichi et al., WACV 2026), Zenodo record 17584629, CC BY 4.0
 # 19,920,684,684 bytes | md5 42da7598cc33a170064e78d8027148c9
 #
-# OJO: NO usar "curl --retry" junto con "-C -". El reintento INTERNO de curl
-# reabre el fichero y lo trunca, asi que la descarga reempieza de cero una y
-# otra vez (asi se perdieron 6 GiB en el primer intento). El servidor SI
-# soporta Range (206 + content-range verificado), asi que la reanudacion
-# correcta es un bucle EXTERNO: cada curl nuevo continua desde el tamano actual.
+# Careful: do NOT combine "curl --retry" with "-C -". The retry happens inside
+# curl, which reopens the file and truncates it, so the download restarts from
+# zero over and over (that is how 6 GiB were lost on the first attempt). The
+# server does support Range (206 plus a verified content-range), so the correct
+# way to resume is an outer loop: every fresh curl continues from the current
+# size.
 set -u
-cd "${1:?uso: download_wstsplus.sh <directorio destino>}"
+cd "${1:?usage: download_wstsplus.sh <target directory>}"
 URL="https://zenodo.org/records/17584629/files/WSTSPlus.zip?download=1"
 TARGET=19920684684
 MD5="42da7598cc33a170064e78d8027148c9"

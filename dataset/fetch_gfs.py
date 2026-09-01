@@ -1,16 +1,16 @@
-#!/usr/bin/env python3
-"""Descarga el archivo GFS 0.25 que necesita el contrato de covariables futuras.
+"""Download the 0.25 degree GFS archive the future-covariate contract needs.
 
-Para cada fecha con fuego en AFSeq baja, del ciclo 00Z, solo los mensajes que
-usan nuestros siete canales meteorologicos, por byte-range sobre el .idx: unos
-5 MB por fichero en vez de los ~400 MB del GRIB completo.
+For every date with fire in AFSeq this pulls, from the 00Z cycle, only the
+messages our seven weather channels use, as byte ranges over the .idx file.
+That is about 5 MB per file instead of the ~400 MB of the full GRIB.
 
-  f000                      analisis  -> contrato gfs_anl
-  f024 f048 f072 f096 f120  pronostico -> contrato gfs_fcst (t+1..t+5)
-  APCP cada 6 h hasta f120  para poder acumular la precipitacion diaria
+  f000                      analysis, for the gfs_anl contract
+  f024 f048 f072 f096 f120  forecast, for the gfs_fcst contract (t+1 to t+5)
+  APCP every 6 h up to f120, so daily precipitation can be accumulated
 
-Cachea por (fecha, fhr); muchos eventos comparten dias, asi que 13.874
-dias-evento se reducen a ~963 fechas. Reanudable: salta lo ya bajado.
+The cache key is (date, fhr). Many events share days, so 13,874 event-days
+come down to about 963 dates. Resumable: anything already downloaded is
+skipped.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -24,8 +24,9 @@ from urllib3.util.retry import Retry
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import paths  # noqa: E402
 
-# Una sesion por hilo: sin esto cada peticion abre un socket nuevo y con 14
-# hilos se agota el ulimit (1024) a las pocas miles de descargas -> OSError.
+# One session per thread. Without this every request opens a fresh socket and,
+# with 14 threads, the ulimit of 1024 runs out after a few thousand downloads
+# and every later request raises OSError.
 _LOCAL = threading.local()
 
 
@@ -42,19 +43,19 @@ def _session():
 
 B = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
 OUT = paths.DATA / "gfs"
-# (shortName GRIB, nivel) -> nuestros canales lst, dew, rh, wind_*, pressure
+# (GRIB shortName, level) for our lst, dew, rh, wind_* and pressure channels
 BASE = [("TMP", "surface"), ("DPT", "2 m above ground"), ("RH", "2 m above ground"),
         ("UGRD", "10 m above ground"), ("VGRD", "10 m above ground"),
         ("PRES", "surface")]
 PRECIP = [("APCP", "surface")]
-DAILY = (0, 24, 48, 72, 96, 120)          # analisis + t+1..t+5
-PRECIP_HOURS = tuple(range(6, 121, 6))     # acumulados de 6 h
+DAILY = (0, 24, 48, 72, 96, 120)          # analysis plus t+1 to t+5
+PRECIP_HOURS = tuple(range(6, 121, 6))     # 6-hourly accumulations
 
 
 def messages_for(fhr: int):
-    """Que mensajes hacen falta en este horizonte."""
+    """Which GRIB messages this forecast hour needs."""
     if fhr == 0:
-        return BASE                        # el analisis no trae acumulados
+        return BASE                        # the analysis carries no accumulation
     want = list(BASE) if fhr in DAILY else []
     if fhr in PRECIP_HOURS:
         want += PRECIP
@@ -103,7 +104,7 @@ def grab(date: str, fhr: int, cycle: str = "00", tries: int = 4) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dates", type=Path, default=None, help="json con la lista de fechas")
+    ap.add_argument("--dates", type=Path, default=None, help="json with the list of dates")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
@@ -117,7 +118,7 @@ def main():
         dates = dates[:a.limit]
     hours = sorted(set(DAILY) | set(PRECIP_HOURS))
     jobs = [(d.replace("-", ""), h) for d in dates for h in hours]
-    print(f"{len(dates)} fechas x {len(hours)} horizontes = {len(jobs)} ficheros", flush=True)
+    print(f"{len(dates)} dates x {len(hours)} horizons = {len(jobs)} files", flush=True)
 
     stats = {}
     t0 = time.time()
@@ -130,7 +131,7 @@ def main():
                 el = time.time() - t0
                 print(f"  {n}/{len(jobs)}  {el/60:.1f} min  "
                       + " ".join(f"{k}={v}" for k, v in sorted(stats.items())), flush=True)
-    print("FIN", stats, flush=True)
+    print("done", stats, flush=True)
 
 
 if __name__ == "__main__":

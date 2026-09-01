@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Exp 4, part one: the native WSTS+ baseline (their model, their loader).
 
     python experiments/cross/native.py --launch
@@ -21,7 +20,7 @@ re-implemented in models/ precisely so this stays unambiguous.
 Their repo needs wsts+_compat.py applied first. Seven patches, all reversible,
 all documented there. One of them is not a version fix but a bug: their
 FireSpreadDataset's index lookup never stops at the fire it finds, so every
-sample resolves into the LAST year of the split -- measured on fold 0, all 401
+sample resolves into the LAST year of the split, measured on fold 0, all 401
 sampled indices landed in 2021 and 272 named the wrong fire, leaving the 7,071
 datapoints of 2016/2017/2020 unreachable. Without that patch a WSTS+ baseline
 is trained and scored on one mangled year.
@@ -78,13 +77,13 @@ def matrix(out: Path) -> list[Job]:
 
 
 def check_compat():
-    """Refuse to launch against an unpatched repo -- the index bug is silent."""
+    """Refuse to launch against an unpatched repo: the index bug is silent."""
     fsd = (ROOT / "benchmarks" / "wsts+" / "src" / "dataloader"
            / "FireSpreadDataset.py").read_text()
     if "COMPAT-INDEX" not in fsd:
         raise SystemExit(
-            "El repo de WSTS+ no esta parcheado: sin COMPAT-INDEX todas las\n"
-            "muestras caen en el ultimo ano del split. Ejecuta primero:\n"
+            "The WSTS+ repository is not patched: without COMPAT-INDEX every\n"
+            "sample falls in the last year of the split. Run this first:\n"
             "  python benchmarks/wsts+_compat.py --apply")
 
 

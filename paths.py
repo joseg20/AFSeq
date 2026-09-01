@@ -27,7 +27,7 @@ def _p(var, default):
     return Path(os.environ.get(var, default))
 
 
-# --- data -----------------------------------------------------------------
+# data
 DATA = _p("WSP_DATA", ROOT.parent / "data")
 AFSEQ = _p("AFSEQ_DATA", DATA / "afseq")
 # Decoded copy of AFSEQ (dataset/afseq_cache.py). Only used when the
@@ -35,24 +35,24 @@ AFSEQ = _p("AFSEQ_DATA", DATA / "afseq")
 AFSEQ_CACHE = _p("AFSEQ_CACHE", str(AFSEQ) + "_cache")
 WSTS_HDF5 = _p("WSTS_HDF5", DATA / "wstsplus" / "hdf5")
 
-# --- splits and dataset constants shipped WITH the code ---------------------
+# splits and dataset constants shipped WITH the code
 SPLITS_DIR = _p("AFSEQ_SPLITS_DIR", ROOT / "dataset" / "splits")
 AFSEQ_SPLITS = _p("AFSEQ_SPLITS", SPLITS_DIR / "splits_s23.txt")
 # per-channel TRAIN means used to impute holes (dataset/afseq_loader.py)
 CHANNEL_MEANS = _p("AFSEQ_CHANNEL_MEANS", ROOT / "dataset" / "channel_means.json")
 
-# --- outputs --------------------------------------------------------------
+# outputs
 RUNS = _p("RUNS_DIR", ROOT.parent / "runs")
 RESULTS = _p("RESULTS_DIR", ROOT / "results")
 
-# --- earth engine ---------------------------------------------------------
+# earth engine
 # Your own Earth Engine cloud project; dataset/build_afseq.py needs it.
 EE_PROJECT = os.environ.get("EE_PROJECT", "")
 
-# --- reproducibility ------------------------------------------------------
+# reproducibility
 SEED = int(os.environ.get("SEED", 23))
 
-# --- the numbers any rewrite has to reproduce -----------------------------
+# the numbers any rewrite has to reproduce
 # Acceptance tests, not documentation: if a refactor stops matching these, it
 # has a bug, however clean it looks.
 ANCHORS = {

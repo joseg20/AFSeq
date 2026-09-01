@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Experiment 2 -- the architecture table on AFSeq.
+"""The architecture table on AFSeq.
 
     python experiments/afseq.py --launch      # train the matrix
     python experiments/afseq.py --table       # score it on test
@@ -9,7 +8,7 @@ which is measured rather than trained.
 
   Persistence   tomorrow's fire mask = today's. The floor of the table.
   U-Net         single frame in, one day out
-  ConvNeXt      idem, convnext_large backbone (203M params -- verify against
+  ConvNeXt      idem, convnext_large backbone (203M params, verify against
                 build_model, never against the constructor defaults, which
                 would say 53M)
   ConvLSTM      sequence in, one day out
@@ -37,7 +36,7 @@ THE SCORING PROTOCOL, stated once and applied to every row
 
 PADDING. Every model here must be invariant to appended pad frames: AFSeq
 histories are variable and the collate pads at the END. Four of five were not,
-and their rows measured something other than what they claimed -- U-Net and
+and their rows measured something other than what they claimed. U-Net and
 ConvNeXt read X[:, -1] as "day t" when it was an all-zero frame 68% of the
 time; ConvLSTM returned the cell state after the padded steps; UTAE and UTAE-AR
 pooled padded steps into the LTAE's GroupNorm statistics. All are fixed, and
@@ -96,7 +95,7 @@ SEQ_IN = {"convlstm", "utae", "utae_res18", "utae_ar", "utae_ar4"}
 SEQ_OUT = {"utae_ar", "utae_ar4"}
 
 
-# ------------------------------------------------------------------ launching
+# launching
 def tag_of(model: str, seed: int) -> str:
     lr_tag = f"{LR:g}".replace("-", "").replace(".", "p")
     tag = f"{model}_{LOSS}_lr{lr_tag}"
@@ -137,7 +136,7 @@ def matrix(out: Path, splits: str = "") -> list[Job]:
     return jobs
 
 
-# ------------------------------------------------------------------- scoring
+# scoring
 def afseq_loader(splits_file, patch=PATCH, max_history=16, horizon=1,
                  batch_size=4, workers=4):
     from dataset import afseq_loader
@@ -268,13 +267,13 @@ def main():
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="+", metavar="SUBSTR",
-                    help="lanzar solo los trabajos cuyo nombre contenga esto")
+                    help="launch only the jobs whose name contains this")
     ap.add_argument("--seeds", type=int, nargs="+", default=list(SPLITS))
     ap.add_argument("--rows", nargs="+", default=list(ROWS))
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--batch-size", type=int, default=4,
-                    help="1 = sin padding en el batch; sirve para medir cuanto "
-                         "cambia la AP de un modelo con el relleno")
+                    help="1 = no padding in the batch, which is how to measure "
+                         "how much padding moves a model's AP")
     ap.add_argument("--out", type=Path, default=RUNS / "tabla2")
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--splits", default="",

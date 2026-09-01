@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Experiment 4 -- the cross-benchmark table.
+"""The cross-benchmark table.
 
     python experiments/cross/cross.py --launch [--dry-run]
     python experiments/cross/cross.py --table
@@ -14,7 +13,7 @@ on both:
 
     x 3 models x 4 published folds.
 
-  UTAE-AR       ours. BCE + soft Dice, lr 1e-3 -- our configuration, the one
+  UTAE-AR       ours. BCE + soft Dice, lr 1e-3, our configuration, the one
                 every other table of the paper uses.
   UTAE-Res18    theirs. Their best model overall.
   Res50-Unet    theirs. Their best single-frame encoder after res18.
@@ -24,7 +23,7 @@ on both:
 EVERYTHING HAPPENS IN THE VEG SPACE (7 channels), which is what makes this
 table commensurable with wstsplus.py: the WSTS+ column here and the Veg row of wstsplus.py
 are the same data through the same slice. AFSeq is mapped in by cross/channels
-.py -- 5 of the 7 slots have a counterpart, 2 are filled with the WSTS training
+.py: 5 of the 7 slots have a counterpart, 2 are filled with the WSTS training
 mean, and that fill is a declared confound: a model trained on the union can
 tell the benchmarks apart by those two constant slots.
 
@@ -74,7 +73,7 @@ def matrix(out: Path, models=MODELS, sources=SOURCES, folds=FOLDS,
     """Ours through training/train.py, theirs through cross/train_theirs.py.
 
     `native` prepends the WSTS+-only Res18-Unet baseline, which runs THEIR repo
-    end to end -- their loader, their windowing, their train.py. Everything else
+    end to end: their loader, their windowing, their train.py. Everything else
     in this table goes through our Veg-space loader, so that row is the control
     that says the space conversion did not change what their model can do. It
     also produces the encoder the representation analysis reads from.
@@ -122,8 +121,8 @@ def table(out: Path, models=MODELS, sources=SOURCES, folds=FOLDS):
             cell = (f"{statistics.mean(vals):.4f} +- {statistics.stdev(vals):.4f}"
                     if len(vals) > 1 else f"{statistics.mean(vals):.4f}")
             print(f"{source:<14}{model:<14}{cell:>24}{len(vals):>7}")
-    print("\nNota: best_val_ap. La puntuacion por benchmark en test (columnas")
-    print("AFSeq y WSTS+, nunca combinadas) se calcula sobre estos checkpoints.")
+    print("\nNote: best_val_ap. The per-benchmark test scores (the AFSeq and")
+    print("WSTS+ columns, never pooled) are computed from these checkpoints.")
 
 
 def main():
@@ -132,17 +131,17 @@ def main():
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="+", metavar="SUBSTR",
-                    help="lanzar solo los trabajos cuyo nombre contenga esto")
+                    help="launch only the jobs whose name contains this")
     ap.add_argument("--models", nargs="+", default=list(MODELS))
     ap.add_argument("--sources", nargs="+", default=list(SOURCES))
     ap.add_argument("--folds", type=int, nargs="+", default=list(FOLDS))
     ap.add_argument("--no-native", action="store_true",
-                    help="omitir el baseline de su repo (4 folds)")
+                    help="skip the baseline from their repository (4 folds)")
     ap.add_argument("--only-native", action="store_true",
-                    help="lanzar SOLO ese baseline. Va primero en la cola "
-                         "porque su encoder es el que alimenta el analisis "
-                         "de representaciones, y no tiene "
-                         "sentido esperar a las 36 corridas de la matriz")
+                    help="launch ONLY that baseline. It goes first in the queue "
+                         "because its encoder is the one the representation "
+                         "analysis feeds on, and there is no reason to wait "
+                         "for all 36 runs of the matrix")
     ap.add_argument("--out", type=Path, default=RUNS / "cross")
     a = ap.parse_args()
 

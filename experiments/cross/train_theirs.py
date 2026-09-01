@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Their models on the fused benchmark, with their configuration.
 
     python experiments/cross/train_theirs.py --model utae_res18 --fold 0
@@ -6,8 +5,8 @@
 
 Same split of responsibilities as benchmarks/train_afseq_theirs.py: the model,
 the loss, the optimiser, the three Lightning steps and the AP metric all come
-from benchmarks/wsts+ unmodified. This file only hands them data -- here, the
-fused Veg-space dataset defined by cross/fusion.py -- and runs their Trainer.
+from benchmarks/wsts+ unmodified. This file only hands them data, here the
+fused Veg-space dataset defined by cross/fusion.py, and runs their Trainer.
 
 THE MODELS, and where each configuration comes from:
 
@@ -17,7 +16,7 @@ THE MODELS, and where each configuration comes from:
                .yaml. Their second-best single-frame model (0.457 vs 0.455).
 
   Both take their configuration from cfgs/unet/res18_monotemporal.yaml, which
-  is what EVERY published sweep of theirs passes -- focal loss, AdamW at 1e-3,
+  is what EVERY published sweep of theirs passes: focal loss, AdamW at 1e-3,
   10k steps, batch 64, imagenet weights. The res50 cfg differs only in the
   encoder name.
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Serve AFSeq to the WSTS+ models, without touching the WSTS+ repository.
 
 WHY THIS FILE EXISTS
@@ -20,14 +19,15 @@ mismatches, and what this file does about each, are listed below. Every one of
 them is a deliberate choice for the cross-benchmark experiment, not a bug fix.
 
 --------------------------------------------------------------------------
-CHANGE 1 -- variable-length histories, padded and masked   [temporal models]
+CHANGE 1. Variable-length histories, padded and masked     [temporal models]
 
     AFSeq emits a VARIABLE-length history: `seq_dates = dates[max(0, idx-15) :
     idx+1]`, so a fire observed on its second day yields T=2. Measured on
     splits_v4_s23: 80.3% of training samples and 75.5% of test samples have
     T < 16, and 36.1% of the test set has T < 5.
 
-    WSTS never has this -- it serves exactly `n_leading_observations` days -- so
+    WSTS never has this, since it serves exactly `n_leading_observations`
+    days, so
     their code has no notion of a padded frame.
 
     Here, sequences keep their real length and are padded with zero frames at
@@ -48,7 +48,7 @@ CHANGE 1 -- variable-length histories, padded and masked   [temporal models]
     so it structurally cannot take a variable T), and only for it.
 
 --------------------------------------------------------------------------
-CHANGE 2 -- the feature sets are not the same 40 channels  [affects every model]
+CHANGE 2. The feature sets are not the same 40 channels    [affects every model]
 
     Their `features_to_keep` indexes the 40-channel WSTS layout. AFSeq has 17
     channels with a different layout, so their "Veg" = [0,1,2,3,4,38,39] cannot
@@ -56,12 +56,12 @@ CHANGE 2 -- the feature sets are not the same 40 channels  [affects every model]
 
       WSTS Veg channel        AFSeq equivalent
       ---------------------   ---------------------------------------------
-      0  VIIRS M11            MISSING -- AFSeq has 2 reflectance bands, not 3
+      0  VIIRS M11            MISSING. AFSeq has 2 reflectance bands, not 3
       1  VIIRS I2             14 (reflectance band 0)
       2  VIIRS I1             15 (reflectance band 1)
       3  NDVI                 4
       4  EVI2                 5
-      38 active fire, hour    MISSING -- AFSeq keeps no detection hour
+      38 active fire, hour    MISSING. AFSeq keeps no detection hour
       39 active fire, binary  16
 
     So the closest AFSeq analogue of Veg is 5 channels, not 7: two of theirs
@@ -69,16 +69,16 @@ CHANGE 2 -- the feature sets are not the same 40 channels  [affects every model]
     passes the full 17 channels, which is the honest analogue of their "All".
 
 --------------------------------------------------------------------------
-CHANGE 3 -- normalisation is already applied               [affects every model]
+CHANGE 3. Normalisation is already applied                 [affects every model]
 
     `FireSpreadDataModule` standardises with per-channel means/stds computed
     over the WSTS training years. AFSeq's `get_features` already returns
     normalised values, and imputes its holes with the channel mean (holes are
     NaN in the dataset, never a plausible constant). No second normalisation is
-    applied here -- doing it would rescale already-scaled data.
+    applied here, since doing it would rescale already-scaled data.
 
 --------------------------------------------------------------------------
-CHANGE 4 -- pos_class_weight is computed, and then ignored  [Focal loss only]
+CHANGE 4. pos_class_weight is computed, and then ignored    [Focal loss only]
 
     Their `train.py:before_instantiate_classes` derives pos_class_weight from
     the WSTS fold's missing-value rates. That path is WSTS-specific, so this
@@ -86,7 +86,7 @@ CHANGE 4 -- pos_class_weight is computed, and then ignored  [Focal loss only]
     never reaches the loss anyway. `BaseModel.__init__` normalises it into
     (0,1), the subclass' `save_hyperparameters()` immediately restores the raw
     value, and `compute_loss` passes `alpha = 1 - pos_class_weight`, which is
-    negative -- and torchvision 0.15.1 (pinned in their requirements.txt)
+    negative, and torchvision 0.15.1 (pinned in their requirements.txt)
     applies the class re-weighting only `if alpha >= 0`. Their published numbers
     are therefore focal loss with gamma=2 and NO class weighting. See the
     COMPAT-ALPHA note in wsts+_compat.py.
@@ -131,7 +131,7 @@ def _load_afseq_dataset():
 
 # Verbatim from with_wstsplus/train_afseq_proto.py (load_ids, dl_ids), inlined
 # so that importing this file does not pull in that module's sklearn/model
-# imports -- and because packaging the split reading is a release TODO anyway.
+# imports, and because packaging the split reading is a release TODO anyway.
 def load_ids(section: str, splits_file) -> list:
     lines = pathlib.Path(splits_file).read_text().splitlines()
     s = [i for i, l in enumerate(lines) if l.startswith(section)][0] + 1

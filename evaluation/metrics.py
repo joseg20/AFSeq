@@ -73,7 +73,7 @@ def _test():
     print()
     print("  peor diferencia: %.2e" % worst)
     print("  veredicto:", "EQUIVALENTE" if worst < 1e-6 else
-          "DIFIERE -- no usar sin revisar")
+          "DIFFERS, do not use without checking")
     return worst < 1e-6
 
 

@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
-"""Test AP por fold de los anclas UTAE-AR en los tres conjuntos de features.
+"""Test AP per fold of the published UTAE-AR anchors, for the three feature sets.
 
-Los JSON de los checkpoints publicados solo guardan best_val_ap; la tabla
-principal reporta AP de TEST. Esto lo mide con el protocolo de siempre
-(pooled a t+1, crop 128, mascara de validez) para poder desglosar por fold.
+The JSON files that ship with those checkpoints record only best_val_ap, while
+the main table reports TEST AP. This measures it under the usual protocol
+(pooled at t+1, 128-px crop, validity mask) so the result can be broken down
+per fold.
 """
 import argparse, json, os, sys
 from pathlib import Path

@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 """Their WSTS+ models, with the one change AFSeq's variable-length fires need.
 
 Their repository stays byte-identical; the delta lives here, as a subclass.
 
 --------------------------------------------------------------------------
-THE CHANGE -- pad_mask through the temporal attention
+THE CHANGE: pad_mask through the temporal attention
 
     WSTS hands every model exactly `n_leading_observations` days, so a padded
     frame never exists and their `SMPTempModel.forward` has no reason to mask
@@ -13,7 +12,7 @@ THE CHANGE -- pad_mask through the temporal attention
     collate pads them with zero frames at the END of the sequence.
 
     Run their forward unchanged on that, and the LTAE attends over zero frames
-    as if they were observations -- a straw-man version of their model, which
+    as if they were observations, a straw-man version of their model, which
     would understate their architecture on our data. Both Garnot classes they
     vendor (`LTAE2d.forward(..., pad_mask=None)`, `Temporal_Aggregator.forward(
     ..., pad_mask=None)`) already accept a pad mask; their SMPTempModel simply
@@ -22,7 +21,7 @@ THE CHANGE -- pad_mask through the temporal attention
     So: same architecture, same weights layout, same everything, plus a pad
     mask derived from the batch. This is the charitable port of their model,
     and it is what our earlier Res18 replica (with_res18/smptemp_active.py)
-    already did -- the difference now is that the architecture itself comes
+    already did. The difference now is that the architecture itself comes
     from their repo instead of being re-implemented by us.
 
     Everything below the `# --- theirs` marker is their forward, verbatim,
@@ -159,7 +158,7 @@ class SMPTempModelPadded(SMPTempModel):
         if not pad_mask.any():
             pad_mask = None          # exactly their path when nothing is padded
 
-        # --- theirs (SMPTempModel.forward), with pad_mask threaded through ---
+        # theirs (SMPTempModel.forward), with pad_mask threaded through
         doys = torch.arange(T, device=x.device).unsqueeze(0).repeat(B, 1)
         num_stages = len(self.model.encoder.out_channels)
         encoder_features = [[] for _ in range(num_stages)]

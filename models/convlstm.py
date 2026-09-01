@@ -1,4 +1,4 @@
-"""ConvLSTM_Seg -- baseline of the architecture table.
+"""ConvLSTM_Seg, a baseline of the architecture table.
 
 ConvLSTM over the observed history, one step ahead. The classic recurrent
 baseline for spatiotemporal forecasting.
@@ -189,7 +189,7 @@ class ConvLSTM(nn.Module):
             layer_output = torch.stack(output_inner, dim=1)
             # The previous `layer_output[:, last_positions]` here indexed a (B,)
             # tensor along dim 1, producing (B, B, C, H, W) rather than one
-            # frame per sample -- and it was dropped anyway, since ConvLSTM_Seg
+            # frame per sample, and it was dropped anyway, since ConvLSTM_Seg
             # discards layer_output and reads the cell state. Freezing above
             # makes the whole sequence correct, so nothing needs trimming.
 

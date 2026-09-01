@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fusing AFSeq into each published WSTS+ fold, in the shared Veg space.
 
     python experiments/cross/fusion.py        # sizes of every fused split
@@ -19,7 +18,7 @@ either side.
 
 SCORED SEPARATELY, NEVER POOLED. Training is on the union; scoring is on each
 benchmark's own test set, reported in its own column. Pooling the two would let
-whichever side contributes more pixels dictate the number -- measured on the
+whichever side contributes more pixels dictate the number, measured on the
 with_mix12 checkpoints, micro pooling said one thing and macro the opposite,
 because WSTS contributes the large majority of pixels.
 
@@ -30,7 +29,7 @@ split stays byte-identical to the one every other table uses.
 
 BOTH SIDES ARE CAPPED AT 5 DAYS of history and give the model the same tensor
 shape. If one benchmark handed longer sequences than the other, sequence length
-would itself identify the source -- on top of the two constant Veg slots that
+would itself identify the source, on top of the two constant Veg slots that
 already do (see channels.py). Capping is the cheaper of the two evils.
 """
 from __future__ import annotations
@@ -124,7 +123,7 @@ class _AFSeqVeg(Dataset):
         # Same 5 real days ending on day t as the WSTS+ side, repeating the
         # oldest frame when the fire is younger. Zero padding would seed the
         # rollout with a blank frame AND leave a length pattern that identifies
-        # the benchmark -- exactly the confound this file is trying not to add.
+        # the benchmark, exactly the confound this file is trying not to add.
         n = X.shape[0]
         X = X[[max(0, n - T_HIST + i) for i in range(T_HIST)]]
         Xv = afseq_to_veg(X, self.mean, self.std, self.drop_refl)

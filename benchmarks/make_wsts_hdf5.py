@@ -1,35 +1,34 @@
-#!/usr/bin/env python3
-"""Convierte los .tif de los 4 anios NUEVOS de WSTS+ (2016, 2017, 2022, 2023) a HDF5.
+"""Convert the .tif files of WSTS+ to HDF5.
 
-Replica exactamente CreateHDF5Dataset.py + get_generator_for_hdf5 del fork de
-Lahrichi (theirs_repo/src/preprocess/CreateHDF5Dataset.py y
-theirs_repo/src/dataloader/FireSpreadDataset.py:598-631), con tres diferencias:
+This reproduces CreateHDF5Dataset.py and get_generator_for_hdf5 of the
+upstream repository (src/preprocess/CreateHDF5Dataset.py and
+src/dataloader/FireSpreadDataset.py:598-631), with three differences:
 
-  1. years = [2016, 2017, 2022, 2023]  (el suyo esta hardcodeado a 2018-2021).
-  2. ds.lnglat() envuelto en try/except: los .tif de WSTS+ NO tienen CRS
-     (comprobado: 40 de 40 ficheros muestreados dan `ds.crs is None`) y
-     ds.lnglat() lanza rasterio.errors.CRSError. El script original aborta en el
-     primer fuego. Aqui se guarda (nan, nan) y se marca con `has_lnglat=False`.
-     lnglat solo es metadato: ni el dataloader ni el entrenamiento lo leen.
-  3. Sin dependencia de torch. El original importa FireSpreadDataset solo para
-     usar su glob y su generador; ese modulo no importa con torch >= 2.x
-     (`from torch.utils.data.dataset import T_co` ya no existe). Aqui se
-     reimplementa el glob, que es literalmente ordenar ficheros.
+  1. The years are an argument. Theirs is hardcoded to 2018-2021, which leaves
+     out the four years WSTS+ adds (2016, 2017, 2022, 2023).
+  2. ds.lnglat() is wrapped in try/except. The WSTS+ .tif files carry no CRS
+     (40 of 40 sampled files give `ds.crs is None`), so ds.lnglat() raises
+     rasterio.errors.CRSError and the original script aborts on the first
+     fire. Here it stores (nan, nan) and records `has_lnglat=False`. lnglat is
+     metadata only: neither the dataloader nor the training reads it.
+  3. No torch dependency. The original imports FireSpreadDataset just to use
+     its glob and its generator, and that module does not import under
+     torch >= 2.x (`from torch.utils.data.dataset import T_co` is gone). The
+     glob is reimplemented here, which is literally sorting file names.
 
-Preprocesado aplicado (identico al suyo, FireSpreadDataset.py:627-630):
-  - canal de fuego activo (banda 22): NaN -> 0  (NaN significa "sin deteccion")
-  - canal de fuego activo: hora de deteccion de hhmm -> hh  (floor_divide 100)
-El resto de bandas se guardan crudas; la estandarizacion ocurre en el dataloader.
+The preprocessing is identical to theirs (FireSpreadDataset.py:627-630):
+  - active fire channel (band 22): NaN -> 0, since NaN means "no detection"
+  - active fire channel: detection time from hhmm to hh (floor_divide 100)
+Every other band is stored raw; standardisation happens in the dataloader.
 
-Salida: <target_dir>/<anio>/<fire_name>.hdf5, dataset "data" (n_imgs, 23, H, W).
+Output: <target_dir>/<year>/<fire_name>.hdf5, dataset "data" (n_imgs, 23, H, W).
 
-Uso (cualquier anio; --years por defecto son los 4 nuevos, pasa 2016 ... 2023
-para reconstruir los ocho de una vez):
-  python benchmarks/make_wsts_hdf5.py --data_dir <unzip de WSTSPlus.zip> \
+Usage (any year; --years defaults to the four new ones, pass 2016 ... 2023 to
+rebuild all eight at once):
+  python benchmarks/make_wsts_hdf5.py --data_dir <unzipped WSTSPlus.zip> \
       --target_dir $WSTS_HDF5 --years 2016 2017 2018 2019 2020 2021 2022 2023
 
-Movido al release el 25/08 desde with_wstsplus/make_hdf5_new_years.py; es el
-script con el que se construyo el HDF5 que usan wstsplus.py y cross/.
+This is the script the HDF5 used by wstsplus.py and cross/ was built with.
 """
 import argparse
 import glob
@@ -85,13 +84,13 @@ def generator(imgs_per_fire):
                 p.split("/")[-1].split("_")[0].replace(".tif", "") for p in img_files
             ]
 
-            # --- canal de fuego activo (banda 23 / indice 22) ---
-            # OJO: la codificacion cambia entre eras.
-            #   WSTS 2018-2021 : hhmm (754, 800, ... 2218), NaN si no hay deteccion
-            #   WSTS+ nuevos   : hh   (6..22),               0   si no hay deteccion
-            # Aplicar floor_divide(.,100) a los anios nuevos pondria TODAS las
-            # detecciones a 0 y destruiria el canal de entrada Y el target.
-            # Se autodetecta y se registra.
+            # Active fire channel (band 23, index 22).
+            # Careful: the encoding changes between eras.
+            #   WSTS 2018-2021 : hhmm (754, 800, ... 2218), NaN for no detection
+            #   the newer WSTS+: hh   (6..22),              0   for no detection
+            # Applying floor_divide(., 100) to the newer years would set EVERY
+            # detection to 0 and destroy both the input channel and the target.
+            # The encoding is detected and logged.
             af = np.nan_to_num(x[:, -1, ...], nan=0)
             pos = af[af > 0]
             if pos.size and pos.max() >= 100:

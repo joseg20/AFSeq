@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 """Build the AFSeq dataset end to end, from event geometries to day rasters.
 
 ONE entry point. Run it against an empty directory and it downloads everything;
 run it against an existing tree and it fills only what is missing or sick. The
 repairs that were applied as one-off scripts during August 2026 are folded in
-here, so this file -- not a sequence of patches -- is what defines the dataset.
+here, so this file, not a sequence of patches, is what defines the dataset.
 
     python build_afseq.py --out /path/new --phase events --contours fires.geojson
     python build_afseq.py --out /path/new --phase events --from-tree /path/old_tree
@@ -22,7 +21,8 @@ Layout produced, per event and per day:
 
 THE RULE THIS PIPELINE EXISTS TO ENFORCE: never write a plausible constant for
 missing data. The previous version answered an empty collection with
-constant([0,0]) for reflectance and constant(273.15) -- 0 C -- for LST, and both
+constant([0,0]) for reflectance and constant(273.15), that is 0 C, for LST,
+and both
 are indistinguishable from a measurement once written. That silently killed 83%
 of the reflectance and 34% of the LST without a single error message. Here a
 hole is written as NaN and recorded in provenance.json, and the loader imputes
@@ -36,17 +36,17 @@ SOURCES, and why each one:
             ~10:30). Measured: Aqua runs +10.1 C warmer than Terra, so the two
             cannot be mixed in one channel; and 13:30 is closer to the hour a
             fire makes its run, with more thermal contrast between burn scar
-            and live fuel. Coverage is 68% vs Terra's 70% -- a rounding error.
+            and live fuel. Coverage is 68% vs Terra's 70%, a rounding error.
   LST hole  ERA5-Land skin_temperature sampled at 13:30 LOCAL (UTC derived from
             longitude). Measured error against real Aqua LST: 4.0 C at 13:30
             versus 11.2 C as a daily mean and 9.06 C for imputing the global
             mean. The clock dominates everything else in this channel. ERA5 is
-            9 km against a 7.7 km patch, so it is flat inside the crop -- but
+            9 km against a 7.7 km patch, so it is flat inside the crop, but
             the real intra-patch variation is only 2.3 C, smaller than ERA5's
             own 4.0 C error, so resampling it to 1 km changes nothing (measured
             identical) and a DEM/NDVI downscaling would polish noise.
   weather   ECMWF/ERA5_LAND/HOURLY, CHIRPS daily for precipitation.
-  reflect   NASA/VIIRS/002/VNP09GA -- Collection 2. Collection 1 stopped being
+  reflect   NASA/VIIRS/002/VNP09GA, Collection 2. Collection 1 stopped being
             produced on 2024-06-16, which is what the old fallback was hiding.
             Collection 2 serves I1/I2 already as reflectance floats: do NOT
             apply the x0.0001 rescale of the old code.
@@ -181,7 +181,7 @@ def write_tif(path: Path, arr, profile):
     tmp.rename(path)
 
 
-# ----------------------------------------------------------------- fire mask
+# fire mask
 def fetch_fire(region, date, out_path, ref_path=None):
     """The DAILY ACTIVE-FIRE mask: VIIRS detections of that one day only.
 
@@ -226,7 +226,7 @@ def fetch_fire(region, date, out_path, ref_path=None):
     return "viirs_snpp+n20+hour"
 
 
-# -------------------------------------------------------------------- climate
+# climate
 def utc_hour_for(region, local_hour, event_id):
     """Local solar hour -> UTC hour, from longitude at 15 deg per hour.
 
@@ -257,10 +257,10 @@ def fetch_climate(region, date, out_path, ref_path, event_id):
     v = era_day.select("v_component_of_wind_10m").mean()
     sp = era_day.select("surface_pressure").mean()
 
-    # --- band 0: LST, Aqua first, ERA5 at the SAME hour as fallback ---------
+    # band 0: LST, Aqua first, ERA5 at the SAME hour as fallback
     # A present image is NOT a present measurement: MYD11A1 ships fully
     # cloud-masked rasters, which download as all-zero and would land as a
-    # brand new faked constant -- the exact bug this pipeline exists to kill.
+    # brand new faked constant, the exact bug this pipeline exists to kill.
     # So the valid-pixel fraction is checked before the band is accepted.
     aqua = (ee.ImageCollection(LST_PRODUCT).filterDate(d0, d1)
             .filterBounds(region))
@@ -320,7 +320,7 @@ def fetch_climate(region, date, out_path, ref_path, event_id):
             arr, prof = s.read().astype("float64"), s.profile.copy()
     # Last line of defence, band by band. ERA5-Land has no data over water, so
     # a coastal patch (Calabria, the Aegean) can come back empty for EVERY
-    # band, not just LST -- and an empty band written as 0 is a faked constant
+    # band, not just LST, and an empty band written as 0 is a faked constant
     # again: 0 C, 0 m/s, 0 hPa. Any band that is a flat zero is declared NaN.
     # ONLY when the WHOLE raster is empty. A single flat-zero band is usually
     # legitimate: precipitation is exactly 0 on a dry day, and CHIRPS is daily
@@ -341,7 +341,7 @@ def fetch_climate(region, date, out_path, ref_path, event_id):
     return source
 
 
-# ---------------------------------------------------------------- reflectance
+# reflectance
 def fetch_reflectance(region, date, out_path, ref_path):
     d0 = ee.Date(date)
     # I1 (0.64 um) and I2 (0.86 um) on the 500 m grid, M11 (1.6 um SWIR) on
@@ -353,7 +353,7 @@ def fetch_reflectance(region, date, out_path, ref_path):
            .filterBounds(region).select(["I1", "I2", "M11"]))
     if retry(lambda: col.size().getInfo()) == 0:
         raise NoData("VNP09GA sin imagen")
-    # Collection 2 already serves reflectance floats -- no x0.0001 here
+    # Collection 2 already serves reflectance floats, no x0.0001 here
     img = col.mean().rename(["I1", "I2", "M11"])
     if ref_path and Path(ref_path).exists():
         arr, prof = retry(download, img, region, SCALE_REFL, ref_path)
@@ -368,7 +368,7 @@ def fetch_reflectance(region, date, out_path, ref_path):
 
 
 
-# ------------------------------------------------------------------ static
+# static
 def utm_epsg(lon: float, lat: float) -> int:
     zone = int((lon + 180) / 6) + 1
     return 32600 + zone if lat >= 0 else 32700 + zone
@@ -489,7 +489,7 @@ def fetch_static(region, event_dir: Path, force=False, ref=None):
                      .sort("system:time_start", False).limit(2))
         mod16 = ee.ImageCollection("MODIS/061/MOD16A2").filterBounds(region).filterDate(d0, d1)
         if retry(lambda: mod13.size().getInfo()) == 0:
-            raise NoData("MOD13Q1 sin cobertura en los 30 dias previos")
+            raise NoData("MOD13Q1 has no coverage in the previous 30 days")
         veg = ee.Image.cat([
             mcd12.select("LC_Type1").mode().rename("landcover"),
             mod13.select("NDVI").mean().rename("NDVI"),
@@ -538,7 +538,7 @@ def run_static(out: Path, workers: int, force: bool):
     todo = [e for e in events
             if force or not (e / "dem.tif").exists()
             or not (e / "vegetation.tif").exists()]
-    log(f"fase static: {len(todo)} eventos de {len(events)}")
+    log(f"static phase: {len(todo)} events of {len(events)}")
     if not todo:
         return {}
     stats, lock = {}, threading.Lock()
@@ -563,7 +563,7 @@ def run_static(out: Path, workers: int, force: bool):
     return stats
 
 
-# ------------------------------------------------------------------ events
+# events
 MARGIN_KM = 10.0       # around the final contour, every side
 MIN_PX = 256           # window never smaller than this, at SCALE_FIRE
 
@@ -627,7 +627,7 @@ def run_events(out: Path, contours: Path, margin_km: float = MARGIN_KM,
     """Create the event skeleton from a GeoJSON of fire contours.
 
     Each feature needs an id, a geometry, and start_date / end_date in its
-    properties -- which is what create-dataset/get_fires.py and the expansion
+    properties, which is what create-dataset/get_fires.py and the expansion
     census produce. THAT selection (which fires are in the dataset, after the
     cropland, duration and clustering filters) is a research decision and stays
     upstream: this phase turns an agreed list into directories, it does not
@@ -677,10 +677,10 @@ def run_events_from_tree(out: Path, src: Path, margin_km: float = MARGIN_KM,
         (out / "excluded.json").write_text(json.dumps(rec, indent=1))
         log(f"fase events: excluded.json heredado de {src} "
             f"({len(rec.get('events', {}))} eventos ya excluidos)")
-    log(f"fase events: {made} eventos recreados en {out} desde {src}")
+    log(f"events phase: {made} events recreated in {out} from {src}")
     return {"events": made}
 
-# --------------------------------------------------------------------- driver
+# driver
 def region_of(event_dir: Path):
     """Event footprint, from the day rasters if present, else info.geojson."""
     for day in sorted(event_dir.iterdir()):
@@ -745,7 +745,7 @@ def run_phase(out: Path, phase: str, workers: int, limit: int, force: bool):
                 break
         if limit and len(jobs) >= limit:
             break
-    log(f"fase {phase}: {len(jobs)} dias por (re)construir")
+    log(f"{phase} phase: {len(jobs)} days to (re)build")
     if not jobs:
         return {}
 
@@ -820,7 +820,7 @@ def audit(out: Path):
             ddir = edir / day
             if not ddir.is_dir() or not day[:4].isdigit():
                 continue
-            c["dias"] += 1
+            c["days"] += 1
             for phase, (fname, _) in NEEDS.items():
                 p = ddir / fname
                 if not p.exists():
@@ -852,18 +852,18 @@ def audit(out: Path):
                         c["reflect: real"] += 1
                 else:
                     c["fire: ok"] += 1
-    d = c.pop("dias")
-    log(f"\naudit: {d} dias-fuego")
+    d = c.pop("days")
+    log(f"\naudit: {d} fire-days")
     for k in sorted(c):
         log("  %-34s %6d  (%4.1f%%)" % (k, c[k], 100 * c[k] / max(d, 1)))
     if any("FINGIDO" in k for k in c):
-        log("\n  AVISO: quedan rellenos fingidos, que este pipeline no debe producir")
+        log("\n  WARNING: faked fill values remain, which this pipeline must never produce")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
-                    help="arbol del dataset (por defecto, paths.AFSEQ)")
+                    help="the dataset tree (paths.AFSEQ by default)")
     ap.add_argument("--phase", default="all",
                     choices=["all", "events", "static", "fire", "climate",
                              "reflect", "audit", "curate", "splits", "cache",
@@ -872,13 +872,13 @@ def main():
                     help="curate: fraccion de eventos mas persistentes a excluir "
                          "por region (por defecto US=0.15, ver dataset/curate.py)")
     ap.add_argument("--contours", type=Path,
-                    help="GeoJSON de contornos para --phase events")
+                    help="GeoJSON of contours for --phase events")
     ap.add_argument("--from-tree", type=Path, nargs="+",
-                    help="events: recrear los eventos (ids, contornos, dias) de "
-                         "uno o mas arboles existentes con la ventana nueva")
+                    help="events: recreate the events (ids, contours, days) of "
+                         "one or more existing trees with the new window")
     ap.add_argument("--fresh", action="store_true",
-                    help="events --from-tree: NO heredar excluded.json, para que "
-                         "--phase curate se calcule de nuevo sobre el arbol final")
+                    help="events --from-tree: do NOT inherit excluded.json, so "
+                         "--phase curate is recomputed on the final tree")
     ap.add_argument("--margin-km", type=float, default=MARGIN_KM)
     ap.add_argument("--min-px", type=int, default=MIN_PX)
     ap.add_argument("--workers", type=int, default=12)
@@ -888,7 +888,7 @@ def main():
     args = ap.parse_args()
 
     if args.phase == "events" and not (args.contours or args.from_tree):
-        raise SystemExit("--phase events necesita --contours <geojson> o --from-tree <arbol>")
+        raise SystemExit("--phase events needs --contours <geojson> or --from-tree <tree>")
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "curate":
         return run_curate(args)

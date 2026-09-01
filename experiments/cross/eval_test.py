@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
-"""Exp4 -- TEST scoring of the fused checkpoints, one column per benchmark.
+"""TEST scoring of the fused checkpoints, one column per benchmark.
 
     python experiments/cross/eval_test.py --models utae_ar --sources afseq
 
 Same protocol as the table of afseq.py: pooled AP at t+1, crop 128, valid mask on t+1,
 ties collapsed as sklearn (evaluation/metrics.py). Each checkpoint is scored on
-each benchmark's own test set, in its own column -- never pooled (see cross.py).
+each benchmark's own test set, in its own column, never pooled (see cross.py).
 The AFSeq test set is fold-independent; the WSTS+ test years change per fold.
 
 Only utae_ar for now: the "theirs" rows (utae_res18, res50_unet) come out of
@@ -40,10 +39,10 @@ from cross import tag_of                                         # noqa: E402
 
 
 def load_res18(tag: str, out_dir: Path):
-    """Modelo res18 desde el JSON del run (original o clon en otro disco).
+    """A res18 model from the JSON of its run, original or mirrored elsewhere.
 
-    El JSON dice donde esta el best_ckpt; los clones lo escriben con la ruta
-    vista desde el otro nodo, que aqui cuelga de otro punto de montaje.
+    The JSON says where best_ckpt is. A mirrored run writes that path as the
+    other node saw it, which here hangs off a different mount point.
     Los centinelas (placeholder) no cuentan como runs hechos.
     """
     import json as _json
@@ -54,8 +53,8 @@ def load_res18(tag: str, out_dir: Path):
         meta = _json.loads(js.read_text())
         if "placeholder" in meta or not meta.get("best_ckpt"):
             continue
-        # CKPT_REWRITE="viejo=nuevo" reescribe el prefijo del checkpoint cuando
-        # el run se lanzo con otro punto de montaje.
+        # CKPT_REWRITE="old=new" rewrites the checkpoint prefix when
+        # the run was launched under a different mount point.
         ck = meta["best_ckpt"]
         rw = os.environ.get("CKPT_REWRITE", "")
         if "=" in rw:
@@ -114,9 +113,9 @@ def main():
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--limit", type=int, default=0,
-                    help="cortar tras N lotes por split; solo smoke test")
+                    help="stop after N batches per split; smoke test only")
     ap.add_argument("--anchor-dir", type=Path, default=None,
-                    help="directorio de best_AR_Veg_p4f*.pth para la fuente "
+                    help="directory of best_AR_Veg_p4f*.pth for the source "
                          "pseudo 'wsts_anchor'")
     ap.add_argument("--out", type=Path, default=RUNS / "cross")
     a = ap.parse_args()
@@ -196,7 +195,7 @@ def main():
                              f"{statistics.stdev(vals):.4f}" if len(vals) > 1
                              else (f"{vals[0]:.4f}" if vals else "-"))
             print(f"{source:<12}{model_name:<10}{cells[0]:>16}{cells[1]:>16}")
-    print("\nNota: AP pooled a t+1, test de cada benchmark por separado.")
+    print("\nNote: pooled AP at t+1, each benchmark on its own test set.")
 
 
 if __name__ == "__main__":

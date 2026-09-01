@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """WSTS+ served to our models, from the release, using THEIR loader.
 
 The mirror image of afseq_datamodule.py: there, their model on our data; here,
@@ -21,7 +20,8 @@ HISTORY  "fixed" (default 5) or "variable"
     days, and `datapoints_in_fire = n_imgs - n_leading_observations` silently
     drops the opening days of every fire. Measured on fold 0's training years,
     lead=5 keeps 10,408 of the 12,644 windows a lead of 1 would allow: 82.3%.
-    No fire is lost -- WSTS+ fires are long (min 9 days, median 21) -- but the
+    No fire is lost, since WSTS+ fires are long (min 9 days, median 21), but
+    the
     first five days of each one never appear.
 
     "variable" instead takes the window [max(0, i-max_history+1), i], so a fire
@@ -39,7 +39,7 @@ REQUIRE_FIRE_ON_T  False by default here
 
     AFSeq's sampler only emits windows with active fire on day t. Applied to
     WSTS that discards ignition (nothing at t, fire at t+1), extinction and
-    empty windows -- about 31% of their test set. Their own benchmark keeps
+    empty windows, about 31% of their test set. Their own benchmark keeps
     them, so the default here is False: train and score on everything. Set it
     True only to match an AFSeq-style protocol, and say so.
 
@@ -50,7 +50,7 @@ from __future__ import annotations
 import json
 import os
 # HDF5 file locking over NFS hangs or serialises the workers (each one opens
-# the same files): 8 workers at 5% CPU, GPU at 0%, no bytes read -- measured on
+# the same files): 8 workers at 5% CPU, GPU at 0%, no bytes read, measured on
 # an NFS-backed cluster. Local disks never showed it. Off here, in
 # the loader, so every entry point (train.py, the experiments, the tests) gets it.
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
@@ -97,7 +97,7 @@ FOLDS4 = [
 
 # The ORIGINAL WSTS protocol: 12 folds over the four years 2018-2021. Each
 # fold holds one year out for test and one of the remaining three for val,
-# training on the other two -- 4 x 3 = 12. This is the table of the original
+# training on the other two, 4 x 3 = 12. This is the table of the original
 # WildfireSpreadTS paper, and the one supp. S3.1 reports UTAE-AR on. Folds are
 # addressed as 100 + i so the 4-fold path stays byte-identical.
 WSTS_YEARS = (2018, 2019, 2020, 2021)
@@ -218,7 +218,6 @@ def make_dataset(fold: int, part: str, data_dir: str, features: str = "All",
         def __len__(self):
             return len(self.samples)
 
-        # ------------------------------------------------------------------
         # WINDOWED READ. The HDF5 datasets are contiguous, so the original
         # path reads the FULL rasters of every day of the window (~80 MB a
         # sample) to keep a 128-px crop (~15 MB). Choosing the crop BEFORE
@@ -233,7 +232,6 @@ def make_dataset(fold: int, part: str, data_dir: str, features: str = "All",
         # are BIT-IDENTICAL to the full-read path (verified by
         # test_windowed_equals_fullread.py). WSTS_FULLREAD=1 forces the
         # original path; rasters not larger than the crop also fall back.
-        # ------------------------------------------------------------------
         def _pick_window(self, raw, hh, ww):
             """(top, left, hflip, vflip, rotate), or None to fall back."""
             cs = self.crop_side_length

@@ -99,17 +99,18 @@ CH = {name: i for i, name in enumerate(CHANNELS)}
 
 
 
-# ---------------------------------------------------------------- contrato GFS
-# AFSEQ_MET elige de donde salen los siete canales meteorologicos de las
-# covariables FUTURAS (fut_covars). "era" es lo que se ha usado siempre:
-# reanalisis observado del dia t+k, un techo que en operacion no existe.
-# "gfs_fcst" usa el pronostico emitido el dia t (f024..f120) y "gfs_anl" el
-# analisis GFS del propio dia, que aisla el error de pronostico del efecto de
-# la resolucion mas gruesa. La historia (X) nunca cambia: siempre es observada.
+# The future-covariate contract.
+# AFSEQ_MET picks where the seven weather channels of the FUTURE covariates
+# (fut_covars) come from. "era" is what has always been used: the observed
+# reanalysis of day t+k, a ceiling that does not exist in operation.
+# "gfs_fcst" uses the forecast issued on day t (f024 to f120), and "gfs_anl"
+# uses the GFS analysis of the same day, which separates forecast error from
+# the effect of the coarser resolution. The history X never changes: it is
+# always observed.
 MET_MODE = os.environ.get("AFSEQ_MET", "era")
 GFS_EVENTS = Path(os.environ.get(
     "AFSEQ_GFS", str(paths.DATA / "gfs_events")))
-MET_SLICE = slice(CH["lst"], CH["precipitation"] + 1)      # canales 23..29
+MET_SLICE = slice(CH["lst"], CH["precipitation"] + 1)      # channels 23 to 29
 
 
 
@@ -117,10 +118,10 @@ _EVENT_TRANSFORM = {}
 
 
 def event_transform(iddir, date):
-    """Transform del raster del evento, leido del GeoTIFF de disco.
+    """The event raster transform, read from the GeoTIFF on disk.
 
-    No usa load_raster a proposito: con AFSEQ_CACHE instalada esa funcion sirve
-    .npy de la cache y devuelve None como transform.
+    It deliberately avoids load_raster: with AFSEQ_CACHE installed that
+    function serves .npy files from the cache and returns None as transform.
     """
     fid = Path(iddir).name
     tr = _EVENT_TRANSFORM.get(fid)
@@ -132,19 +133,19 @@ def event_transform(iddir, date):
 
 
 def _gfs_regrid(arr, bbox, transform, top, left, ph):
-    """De la malla GFS de 0.25 grados a la rejilla del crop, bilineal.
+    """Bilinear, from the 0.25 degree GFS grid onto the grid of the crop.
 
-    arr: (..., h, w) en la malla nativa; bbox: (lon0, lat0, lon1, lat1) del
-    recorte, con latitudes DECRECIENTES como las sirve GFS.
+    arr is (..., h, w) on the native grid; bbox is (lon0, lat0, lon1, lat1) of
+    the crop, with latitudes decreasing, the way GFS serves them.
     """
     lon0, lat0, lon1, lat1 = bbox
     h, w = arr.shape[-2:]
-    # centros de celda del crop, en coordenadas del raster del evento
+    # cell centres of the crop, in the coordinates of the event raster
     cols = left + np.arange(ph) + 0.5
     rows = top + np.arange(ph) + 0.5
     lon = transform.c + transform.a * cols
     lat = transform.f + transform.e * rows
-    # posicion fraccionaria dentro de la malla GFS
+    # fractional position inside the GFS grid
     gx = (lon - lon0) / max(lon1 - lon0, 1e-9) * (w - 1)
     gy = (lat1 - lat) / max(lat1 - lat0, 1e-9) * (h - 1)
     gx = np.clip(gx, 0, w - 1); gy = np.clip(gy, 0, h - 1)
@@ -159,8 +160,8 @@ def _gfs_regrid(arr, bbox, transform, top, left, ph):
 
 
 def gfs_future_met(fid, day_t, transform, top, left, ph, horizon):
-    """(horizon, 7, ph, ph) con los canales meteorologicos del contrato GFS,
-    o None si ese dia no tiene pronostico descargado."""
+    """(horizon, 7, ph, ph) of weather channels under the GFS contract, or None
+    when that day has no forecast downloaded."""
     f = GFS_EVENTS / fid / day_t / "gfs.npz"
     if not f.exists():
         return None
@@ -190,7 +191,7 @@ def _add(d, n):
     return (datetime.strptime(d, "%Y-%m-%d") + timedelta(days=n)).strftime("%Y-%m-%d")
 
 
-# ----------------------------------------------------------------- rasters
+# rasters
 # static layers (dem, vegetation) do not change with the day: decoded once
 _STATIC_CACHE = {}
 _CHANNEL_MEANS = None
@@ -203,7 +204,7 @@ def _channel_means():
         p = Path(CHANNEL_MEANS)
         if not p.exists():
             raise FileNotFoundError(
-                f"faltan las medias de canal ({p}): sin ellas no se puede "
+                f"channel means missing ({p}): without them nothing can be "
                 "imputar, y rellenar con 0 sesga los canales hacia el minimo.")
         _CHANNEL_MEANS = np.asarray(json.loads(p.read_text())["mean"],
                                     dtype=np.float32)
@@ -229,7 +230,7 @@ def downsample_average(raster, target_shape):
     factor_h = h // th
     factor_w = w // tw
 
-    # recortar para que sea divisible
+    # trim so the shape divides evenly
     h_crop = th * factor_h
     w_crop = tw * factor_w
     raster_cropped = raster[:, :h_crop, :w_crop]
@@ -280,7 +281,7 @@ def normalize_dem(dem):
     slope     = slope / slope_max
     aspect    = aspect / aspect_max
 
-    # Clipping para evitar valores fuera de rango
+    # clip to keep values inside range
     elevation = np.clip(elevation, 0, 1)
     slope     = np.clip(slope, 0, 1)
     aspect    = np.clip(aspect, 0, 1)
@@ -311,7 +312,7 @@ def normalize_vegetation(veg):
     evi = (evi - min_vg_index) / (max_vg_index - min_vg_index)
     et = et / max_et
 
-    # Clipping para evitar valores fuera de rango
+    # clip to keep values inside range
     lc = np.clip(lc, 0, 1)
     ndvi = np.clip(ndvi, 0, 1)
     evi = np.clip(evi, 0, 1)
@@ -384,7 +385,7 @@ def impute_missing(X):
 def get_features(id_dir, fire_date):
     date_path = id_dir / fire_date
     if not date_path.exists(): 
-        return None, None # Retorno explícito si no existe la carpeta de la fecha
+        return None, None   # explicit: no directory for that date
     
     # Verificar máscara del día siguiente (etiqueta Y)
     next_date = (datetime.strptime(fire_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -396,7 +397,7 @@ def get_features(id_dir, fire_date):
         fire_mask, _ = load_raster(fire_mask_path)
         target_shape = fire_mask.shape[1:]
 
-        # --- LECTURA DE DATOS ESTÁTICOS ---
+        # LECTURA DE DATOS ESTÁTICOS
         fire_id = id_dir.name
         if fire_id not in _STATIC_CACHE:
             dem_path = id_dir / "dem.tif"
@@ -416,7 +417,7 @@ def get_features(id_dir, fire_date):
         dem_normalized = _STATIC_CACHE[fire_id]['dem']
         vegetation = _STATIC_CACHE[fire_id]['veg']
 
-        # --- DATOS DINÁMICOS ---
+        # DATOS DINÁMICOS
         climate_path = date_path / "climate.tif"
         if climate_path.exists():
             climate = normalize_climate(load_raster(climate_path)[0])
@@ -450,7 +451,7 @@ def get_features(id_dir, fire_date):
         return None, None
 
 
-# ----------------------------------------------------------------- dataset
+# dataset
 def fire_centred_crop(mask_t, ph: int, tH: int, tW: int):
     """(top, left) of the patch: centred on the day-t fire, jittered.
 
@@ -511,8 +512,8 @@ class Seq2SeqActivePadded(Dataset):
                  horizon=8, require_fire_on_t=True, with_fire_hour=False):
         # require_fire_on_t=True is AFSeq's protocol and the default, so every
         # existing experiment is untouched. False also emits the windows WSTS
-        # emits and we never do -- ignition (nothing at t, fire at t+1),
-        # extinction and empty -- which are 30.9% of their test and 0% of ours.
+        # emits and we never do: ignition (nothing at t, fire at t+1),
+        # extinction and empty, which are 30.9% of their test and 0% of ours.
         self.DATASET = Path(DATASET)
         self.with_fire_hour = with_fire_hour
         self.ph = patch_size; self.max_seq_len = max_seq_len; self.H = horizon
@@ -532,7 +533,7 @@ class Seq2SeqActivePadded(Dataset):
             for idx, date in enumerate(dates):
                 if require_fire_on_t and not has_fire.get(date, False):
                     continue
-                # días futuros consecutivos (por calendario) con máscara activa, hasta H
+                # consecutive future calendar days with an active mask, up to H
                 future, d = [], date
                 for _ in range(self.H):
                     nd = _add(d, 1)
@@ -548,9 +549,9 @@ class Seq2SeqActivePadded(Dataset):
             # "trains" on nothing. Say what was looked for and where.
             raise RuntimeError(
                 f"Seq2SeqActivePadded: 0 muestras. {len(ids)} ids pedidos, "
-                f"DATASET={self.DATASET}; cada dia necesita "
+                f"DATASET={self.DATASET}; every day needs "
                 "<id>/<fecha>/active-fire.tif (build_afseq.py --phase fire, o "
-                "--phase adopt-active para un arbol de mascaras antiguo).")
+                "--phase adopt-active for an older mask tree).")
 
     def __len__(self):
         return len(self.samples)
@@ -654,7 +655,7 @@ def collate_padded(batch, pad_value=0.0):
             metas)
 
 
-# ------------------------------------------------------------------ splits
+# splits
 def load_ids(section: str, splits_file) -> list:
     """Fire ids under the `Train` / `Val` / `Test` heading of a splits file."""
     lines = Path(splits_file).read_text().splitlines()

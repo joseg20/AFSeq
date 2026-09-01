@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Experiment 1 -- UTAE-AR on WSTS+, across feature sets and folds.
+"""UTAE-AR on WSTS+, across feature sets and folds.
 
     python experiments/wstsplus.py --launch          # train the matrix
     python experiments/wstsplus.py --launch --dry-run
@@ -29,7 +28,7 @@ different initialisation, different batch order. What DOES reproduce, and what
 should be checked whenever this file changes, is scoring the published
 checkpoints through this same loader: best_AR_Veg_p4f{0..3}_bce_dice_lr0p001.pth
 gives 0.3778 / 0.3089 / 0.4945 / 0.5385, mean 0.4299 against a published
-0.4295. Deltas of 3-9 e-4 -- that is a reproduction, and it is what says the
+0.4295. Deltas of 3 to 9 e-4: that is a reproduction, and it is what says the
 release reads WSTS+ the same way the research tree did.
 """
 from __future__ import annotations
@@ -103,8 +102,8 @@ def table(out: Path):
             m = statistics.mean(got)
             s = statistics.stdev(got) if len(got) > 1 else 0.0
             print(f"{features:<10}{history:<10}{cells}{m:>10.4f}{s:>8.4f}")
-    print("\nNota: best_val_ap, no AP de test. El test se puntua con el mismo")
-    print("protocolo del ancla (crop 128, AP pooled a t+1) en evaluation/.")
+    print("\nNote: best_val_ap, not test AP. Test is scored with the anchor's")
+    print("own protocol (128-px crop, pooled AP at t+1) in evaluation/.")
 
 
 def main():
@@ -113,9 +112,9 @@ def main():
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="+", metavar="SUBSTR",
-                    help="lanzar solo los trabajos cuyo nombre contenga esto")
+                    help="launch only the jobs whose name contains this")
     ap.add_argument("--history", choices=HISTORIES, action="append",
-                    help="limitar a un regimen; por defecto los dos")
+                    help="restrict to one regime; both by default")
     ap.add_argument("--out", type=Path, default=RUNS / "wstsplus")
     a = ap.parse_args()
 

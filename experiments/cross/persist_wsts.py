@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Persistencia en WSTS+ por fold (t+1, AP pooled, protocolo de tab:transfer)."""
 import json, statistics, sys
 from pathlib import Path

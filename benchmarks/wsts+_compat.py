@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Make the WSTS+ repository run on a current environment. Reversible.
 
     python wsts+_compat.py --apply     # patch
@@ -88,7 +87,7 @@ PATCHES = [
                 '        #     UnetDecoder.forward(self, *features)\n'
                 '        # and 0.4+ takes a single list:\n'
                 '        #     UnetDecoder.forward(self, features: List[Tensor])\n'
-                '        # Same tensors, same order -- only the call convention\n'
+                '        # Same tensors, same order; only the call convention\n'
                 '        # differs. SMPTempModel is the only place this bites,\n'
                 '        # because it drives the decoder by hand; SMPModel calls\n'
                 '        # smp.Unet as a whole and is unaffected.\n'

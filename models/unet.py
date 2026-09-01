@@ -1,7 +1,7 @@
-"""UNet -- baseline of the architecture table.
+"""UNet, a baseline of the architecture table.
 
 U-Net on the last observed frame. Static baseline: no temporal modelling at
-all, which is the point -- it measures how much of the task is solved by
+all, which is the point: it measures how much of the task is solved by
 today's fire mask plus context.
 
 Self-contained: extracted from the research code with the transitive closure of

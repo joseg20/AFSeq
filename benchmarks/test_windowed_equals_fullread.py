@@ -1,8 +1,9 @@
-"""Prueba: la lectura por ventana es BIT-IDENTICA al camino original.
+"""Test: the windowed read is bit-identical to the original full read.
 
-Mismo seed de np.random antes de cada muestra -> mismos draws -> mismo crop,
-mismos flips; todo lo demas es por-pixel. Se comparan los cinco campos del
-sample con torch.equal en train (aleatorio) y test (determinista).
+The same np.random seed before each sample gives the same draws, hence the
+same crop and the same flips; everything else is per pixel. The five fields of
+the sample are compared with torch.equal on train, which is random, and on
+test, which is deterministic.
 """
 import os
 import sys

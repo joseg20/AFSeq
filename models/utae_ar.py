@@ -15,7 +15,7 @@ observed after day t are an unreachable ceiling worth +0.050 AP at t+5 over
 freezing them at day t. See evaluation/ for the four supported modes
 (observed / persist / gfs_fcst / gfs_anl).
 
---- from utae_ar/__init__.py ---
+From utae_ar/__init__.py
 UTAE-AR: autoregressive wildfire spread forecasting on a U-TAE backbone.
 
 Typical use::
@@ -29,8 +29,8 @@ Typical use::
 ``fut_covars`` supplies the 16 covariate channels of the rollout inputs; read
 "Input contract" in the README before choosing what to put in it.
 
---- from utae_ar/model.py ---
-UTAE-AR — autoregressive multi-scale ConvLSTM decoder on a shared U-TAE encoder.
+From utae_ar/model.py
+UTAE-AR: autoregressive multi-scale ConvLSTM decoder on a shared U-TAE encoder.
 
 The model takes a variable-length history of daily wildfire observations and
 rolls out ``horizon`` days of next-day active-fire probability maps.
@@ -93,7 +93,7 @@ difference.
 Output is **logits**, shape ``(B, horizon, 1, H, W)``.  Apply ``sigmoid`` to get
 probabilities.
 
---- from utae_ar/utae_parts.py ---
+From utae_ar/utae_parts.py
 Building blocks borrowed from U-TAE, plus the ConvLSTM cell used by the decoder.
 
 U-TAE (`ConvLayer`, `ConvBlock`, `DownConvBlock`, `UpConvBlock`, `LTAE2d`,
@@ -103,7 +103,7 @@ U-TAE (`ConvLayer`, `ConvBlock`, `DownConvBlock`, `UpConvBlock`, `LTAE2d`,
     Vivien Sainte Fare Garnot and Loic Landrieu,
     "Panoptic Segmentation of Satellite Image Time Series with Convolutional
     Temporal Attention Networks", ICCV 2021.
-    https://github.com/VSainteuf/utae-paps  --  MIT licence.
+    https://github.com/VSainteuf/utae-paps, MIT licence.
 
 `ConvLSTMCell` comes from https://github.com/TUM-LMF/MTLCC-pytorch (authors:
 TUM-LMF).
@@ -138,9 +138,7 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Convolutional blocks (spatial encoder / decoder)
-# ---------------------------------------------------------------------------
 class TemporallySharedBlock(nn.Module):
     """Applies a 2-D block to every frame of a (B, T, C, H, W) tensor.
 
@@ -156,7 +154,7 @@ class TemporallySharedBlock(nn.Module):
         self.pad_value = pad_value
 
     def smart_forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.dim() == 4:  # (B, C, H, W) -- a single frame, nothing to mask
+        if x.dim() == 4:  # (B, C, H, W): a single frame, nothing to mask
             return self.forward(x)
 
         b, t, c, h, w = x.shape
@@ -296,9 +294,7 @@ class UpConvBlock(nn.Module):
         return out + self.conv2(out)
 
 
-# ---------------------------------------------------------------------------
 # L-TAE: lightweight temporal attention encoder
-# ---------------------------------------------------------------------------
 class PositionalEncoder(nn.Module):
     """Sinusoidal encoding of the day index, tiled once per attention head."""
 
@@ -412,7 +408,7 @@ class LTAE2d(nn.Module):
 
         out = x.permute(0, 3, 4, 1, 2).contiguous().view(n, t, d)        # (N, T, C)
         # in_norm is a GroupNorm over (channels, time), so it pools its
-        # statistics over the padded steps too -- see utae.masked_group_norm.
+        # statistics over the padded steps too. See utae.masked_group_norm.
         # The fixed-length path (no padding) keeps the original call, so the
         # WSTS+ anchors are bit-identical.
         if pix_pad.any():
@@ -461,9 +457,7 @@ class TemporalAggregator(nn.Module):
         return torch.cat([g for g in out], dim=1)                  # (B, C, H, W)
 
 
-# ---------------------------------------------------------------------------
 # ConvLSTM
-# ---------------------------------------------------------------------------
 class ConvLSTMCell(nn.Module):
     """Standard ConvLSTM cell: one 3x3 conv produces the four gates."""
 
@@ -489,9 +483,7 @@ class ConvLSTMCell(nn.Module):
         return h_next, c_next
 
 
-# ---------------------------------------------------------------------------
 # U-TAE backbone (encoder + L-TAE + aggregator + decoder), no output head
-# ---------------------------------------------------------------------------
 class UTAEBackbone(nn.Module):
     """The parts of U-TAE that UTAE-AR reuses.
 
@@ -551,7 +543,7 @@ class UTAEBackbone(nn.Module):
         )
         self.temporal_aggregator = TemporalAggregator()
 
-    # -- spatial encoder ----------------------------------------------------
+    # spatial encoder
     def encode(self, x: torch.Tensor):
         """Encode a history or a single frame with the same weights.
 
@@ -572,7 +564,7 @@ class UTAEBackbone(nn.Module):
             feats.append(block.smart_forward(feats[-1]))
         return feats, pad_mask
 
-    # -- decoder ------------------------------------------------------------
+    # decoder
     def decode(self, bottleneck: torch.Tensor, skips: Sequence[torch.Tensor]) -> torch.Tensor:
         """Walk the U-Net back up: (B, C, h, w) + skips -> (B, decoder_widths[0], H, W)."""
         out = bottleneck
@@ -649,7 +641,7 @@ class UTAE_AR(nn.Module):
 
         # One ConvLSTM per U-Net level.  Its hidden state has the same width as
         # the aggregated context it is initialised with, and its input is the
-        # encoding of the previous frame at that same level -- hence
+        # encoding of the previous frame at that same level, hence
         # input_dim == hidden_dim == encoder_widths[level].
         self.lstm_bott = ConvLSTMCell(
             input_dim=encoder_widths[-1], hidden_dim=encoder_widths[-1]
@@ -685,7 +677,7 @@ class UTAE_AR(nn.Module):
                 paired with the mask predicted for day t+1+k, so it is the
                 covariate field *of the day just predicted*.  Which day's data
                 you put there is the caller's choice and defines the input
-                contract -- see "Input contract" in the README.  They are always
+                contract; see "Input contract" in the README. They are always
                 *inputs*: the model forecasts fire, not weather.
             y_true: ``(B, horizon, 1, H, W)`` ground-truth masks, used only for
                 scheduled sampling during training.  Pass ``None`` for inference.
@@ -710,7 +702,7 @@ class UTAE_AR(nn.Module):
         b, t = x_hist.shape[:2]
         device = x_hist.device
 
-        # -- 1. encode the history and summarise it in time -------------------
+        # 1. encode the history and summarise it in time
         # feats[i]: (B, T, encoder_widths[i], H/2**i, W/2**i)
         feats, pad_mask = u.encode(x_hist)
         day_index = torch.arange(t, device=device).unsqueeze(0).repeat(b, 1)  # (B, T)
@@ -725,22 +717,22 @@ class UTAE_AR(nn.Module):
             for i in range(self.n_stages - 1)
         ]
 
-        # -- 2. seed the ConvLSTMs with that context --------------------------
+        # 2. seed the ConvLSTMs with that context
         # h = context (what we know), c = 0 (nothing accumulated yet).
         h_b, c_b = bott, torch.zeros_like(bott)
         h_s = list(skip_ctx)
         c_s = [torch.zeros_like(s) for s in skip_ctx]
 
-        # -- 3. pick the frame the rollout starts from ------------------------
+        # 3. pick the frame the rollout starts from
         # Histories are right-padded to the longest one in the batch, so
         # x_hist[:, -1] is an all-zero frame for most samples: measured on the
         # test set, 62% at the evaluation batch size of 4 and 73% at batch size
-        # 8 (0% at batch size 1 -- it is a property of the batch, not of the
+        # 8 (0% at batch size 1: it is a property of the batch, not of the
         # sample).  The rollout must start from the last REAL observed day.
         last_real = ((~pad_mask).long().sum(dim=1) - 1).clamp(min=0)          # (B,)
         prev_frame = x_hist[torch.arange(b, device=device), last_real]        # (B,17,H,W)
 
-        # -- 4. autoregressive rollout ----------------------------------------
+        # 4. autoregressive rollout
         logits = []
         for k in range(self.horizon):
             enc, _ = u.encode(prev_frame)  # per-level encoding of yesterday
@@ -760,7 +752,6 @@ class UTAE_AR(nn.Module):
 
         return torch.stack(logits, dim=1)  # (B, horizon, 1, H, W)
 
-    # ------------------------------------------------------------------ #
     def _next_mask(
         self,
         logit: torch.Tensor,

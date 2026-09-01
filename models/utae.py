@@ -1,4 +1,4 @@
-"""UTAE -- baseline of the architecture table.
+"""UTAE, a baseline of the architecture table.
 
 U-TAE (Garnot & Landrieu): U-Net with lightweight temporal attention, one step
 ahead. The strongest single-step baseline, and the backbone UTAE-AR builds on.
@@ -143,13 +143,13 @@ def masked_group_norm(gn, x, valid):
     variance over the TEMPORAL axis as well as the channel one. With
     variable-length histories, the zero frames the collate appends are pooled in
     as if they were observations, and the statistics drift with the amount of
-    padding -- measured at up to 7.7% of the output scale for 12 padded steps,
+    padding, measured at up to 7.7% of the output scale for 12 padded steps,
     growing monotonically with the padding. The attention mask downstream cannot
     undo it, because the leak happens before the attention.
 
     WSTS never sees this: it serves a fixed number of days, so pad_mask is empty
     and this function is never reached. That is also why the callers below keep
-    the original `gn(x)` path whenever nothing is padded -- the numbers of every
+    the original `gn(x)` path whenever nothing is padded, so the numbers of every
     fixed-length experiment stay bit-identical.
 
     x: (N, C, T) · valid: (N, T), 1.0 where the step is real

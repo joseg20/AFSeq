@@ -1,24 +1,23 @@
-#!/usr/bin/env python3
-"""Convierte el archivo GFS crudo en covariables por evento y dia.
+"""Turn the raw GFS archive into per-event, per-day covariates.
 
-Para cada dia t con fuego de cada evento toma el ciclo 00Z de ESE dia y sus
-horizontes f024..f120 (validos en t+1..t+5), recorta la ventana del evento y
-guarda los siete canales en las unidades que espera normalize_climate:
+For every day t with fire in an event this takes the 00Z cycle of THAT day and
+its f024 to f120 horizons, valid at t+1 to t+5, crops the event window and
+stores the seven channels in the units normalize_climate expects:
 
     temp  C     (GFS TMP:surface,  K - 273.15)
     dew   C     (DPT:2m,           K - 273.15)
     rh    %     (RH:2m)
     ws    m/s   (|UGRD,VGRD:10m|)
-    wdir  deg   (direccion de donde viene el viento, 0 = N)
+    wdir  deg   (direction the wind comes from, 0 = north)
     pres  hPa   (PRES:surface / 100)
-    precp mm    (APCP acumulado de los cuatro sub-pasos de 6 h del dia)
+    precp mm    (APCP summed over the four 6 h sub-steps of the day)
 
-Se guarda EN LA MALLA NATIVA de 0.25 grados, no en la de 200 m: la ventana de
-un evento son unas pocas celdas GFS, asi que el recorte pesa kilobytes y la
-interpolacion a la rejilla del evento se hace al vuelo en el loader. Guardar ya
-reproyectado costaria ~127 GB; asi cuesta ~0.2 GB.
+Everything is stored on the native 0.25 degree grid rather than the 200 m one.
+An event window covers only a few GFS cells, so a crop weighs kilobytes and the
+interpolation onto the event grid happens on the fly in the loader. Storing it
+already reprojected would cost about 127 GB; this way it costs about 0.2 GB.
 
-    <out>/<id>/<fecha>/gfs.npz   fcst (5,7,h,w) float32 + f000 (7,h,w) + bbox
+    <out>/<id>/<date>/gfs.npz   fcst (5,7,h,w) float32 + f000 (7,h,w) + bbox
 """
 from __future__ import annotations
 import argparse, json, sys, tempfile, warnings
@@ -33,7 +32,7 @@ import paths  # noqa: E402
 warnings.filterwarnings("ignore")
 GFS = paths.DATA / "gfs"
 DATA = paths.AFSEQ
-PAD = 0.75          # grados de margen: 3 celdas GFS a cada lado
+PAD = 0.75          # degrees of margin, three GFS cells on every side
 HOURS = (24, 48, 72, 96, 120)
 
 
@@ -54,7 +53,7 @@ def _open(path: Path):
 
 
 def _crop(da, lon0, lat0, lon1, lat1):
-    """Recorte por bbox; GFS viene en longitudes 0..360."""
+    """Crop to a bounding box. GFS longitudes run from 0 to 360."""
     lon = da.longitude.values
     L0, L1 = (lon0 % 360), (lon1 % 360)
     lat_sel = (da.latitude >= lat0) & (da.latitude <= lat1)
@@ -63,21 +62,21 @@ def _crop(da, lon0, lat0, lon1, lat1):
 
 
 def seven(msgs, box):
-    """Los siete canales, en las unidades del loader."""
+    """The seven channels, in the units the loader expects."""
     g = {k: _crop(v, *box).values.astype(np.float32) for k, v in msgs.items()
          if k in ("t", "d2m", "r2", "u10", "v10", "sp", "tp")}
     if not {"t", "d2m", "r2", "u10", "v10", "sp"} <= set(g):
         return None
     u, v = g["u10"], g["v10"]
     ws = np.hypot(u, v)
-    wdir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0     # de donde viene
+    wdir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0     # where it comes from
     return np.stack([g["t"] - 273.15, g["d2m"] - 273.15, g["r2"], ws, wdir,
                      g["sp"] / 100.0, g.get("tp", np.zeros_like(u))])
 
 
 def day_precip(date_dir: Path, box, h_end: int):
-    """Precipitacion diaria: suma de los cuatro acumulados de 6 h que caen en
-    el dia que termina en h_end."""
+    """Daily precipitation: the four 6 h accumulations that fall inside the day
+    ending at h_end, summed."""
     tot = None
     for h in range(h_end - 18, h_end + 1, 6):
         p = date_dir / f"f{h:03d}.grib2"
@@ -145,7 +144,7 @@ def main():
     ids = sorted(p.name for p in DATA.glob("id_*") if p.is_dir())
     if a.limit:
         ids = ids[:a.limit]
-    print(f"{len(ids)} eventos -> {a.out}", flush=True)
+    print(f"{len(ids)} events -> {a.out}", flush=True)
     done = tot = 0
     with ProcessPoolExecutor(max_workers=a.workers) as ex:
         futs = [ex.submit(one_event, i, str(a.out)) for i in ids]
@@ -153,8 +152,8 @@ def main():
             _, ok, nd = f.result()
             done += ok; tot += nd
             if n % 100 == 0 or n == len(ids):
-                print(f"  {n}/{len(ids)} eventos  dias {done}/{tot}", flush=True)
-    print(f"FIN dias con GFS: {done}/{tot}", flush=True)
+                print(f"  {n}/{len(ids)} events  days {done}/{tot}", flush=True)
+    print(f"done, days with GFS: {done}/{tot}", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The job runner every experiment shares.
 
 Each experiments/expN.py declares WHICH runs make up its table; this module
@@ -6,13 +5,13 @@ runs them. Keeping the two apart is what makes an experiment reproducible from
 the release alone: the matrix is code that lives next to the paper, not a shell
 script in somebody's scratch directory.
 
-WHY IT LOOKS LIKE THIS -- the constraints are the cluster's, not PyTorch's:
+WHY IT LOOKS LIKE THIS. The constraints are the cluster's, not PyTorch's:
 
   one GPU        We are asked to use GPU 0 only, with AT MOST 4 processes on
                  it. The others are left alone even when nvidia-smi shows
                  them idle. The 4 is enforced by counting (MAX_GPU_PROCS).
-  few lanes      What runs out first is CPU -- we were twice asked to use
-                 fewer cores -- so LANES is small on purpose and each job
+  few lanes      What runs out first is CPU. We were twice asked to use
+                 fewer cores, so LANES is small on purpose and each job
                  gets OMP_NUM_THREADS=2. Without AFSEQ_CACHE the AFSeq loader
                  spends 89% of its time decoding .tif in rasterio (not disk:
                  iowait 0, dataset in page cache) and an A100 sits at 0-40%
@@ -48,7 +47,7 @@ THREADS = os.environ.get("WSP_THREADS", "2")
 MAX_GPU_PROCS = int(os.environ.get("WSP_MAX_GPU_PROCS", 4))
 
 # HARD ceiling on CPU, not an average. OMP_NUM_THREADS alone is not enough:
-# numba (which UMAP pulls in) defaults to one thread per core -- 256 here --
+# numba (which UMAP pulls in) defaults to one thread per core, 256 here,
 # and MKL/OpenBLAS have their own knobs. Pinning every job to the same small
 # CPU set with taskset makes the ceiling arithmetic instead of hopeful: nothing
 # this runner launches can occupy more than WSP_CPUS cores, whatever a library
@@ -59,7 +58,7 @@ CPUS = os.environ.get("WSP_CPUS", "0-15")
 # Seconds a lane holds the launch lock after starting a job. Counting with
 # nvidia-smi is only a ceiling if the count can see the job it just started:
 # a training takes 30-60 s to touch the GPU, and two lanes waiting on the same
-# GPU used to see the same stale count and start together -- 3 processes on a
+# GPU used to see the same stale count and start together, 3 processes on a
 # GPU capped at 2 (26/08, GPU 1 and GPU 3). Serialising count -> launch -> grace
 # closes that window.
 LAUNCH_GRACE = int(os.environ.get("WSP_LAUNCH_GRACE", 90))
@@ -105,7 +104,7 @@ class Job:
     cwd: Path | None = None
     env: dict = field(default_factory=dict)
     # File the job writes only when it finishes. If it is already there, the
-    # run happened -- even if its marker is missing because the queue was
+    # run happened, even if its marker is missing because the queue was
     # rebuilt or the job predates it. Without this, changing how the queue is
     # launched silently re-runs hours of finished training.
     output: Path | None = None

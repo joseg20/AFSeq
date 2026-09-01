@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The four loss functions of the WSTS+ grid search, plus our own (bce_dice).
 
 Ported verbatim from with_wstsplus/losses_wsts.py on 2026-08-25; train.py

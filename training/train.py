@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Train any model of the architecture table on AFSeq. One entry point.
 
     python train.py --model utae_ar --loss bce_dice --lr 1e-3
@@ -11,7 +10,7 @@ TWO FAMILIES, ONE LOOP. Single-step models (unet, convnext, convlstm, utae)
 predict day t+1 only, so they are trained with H=1 and scored on the first
 horizon. UTAE-AR rolls five days forward and is trained with teacher forcing
 that decays over the run. The difference is confined to `forward()` and to the
-horizon; everything else -- data, loss, optimizer, selection -- is shared, which
+horizon; everything else (data, loss, optimizer, selection) is shared, which
 is what makes the table a comparison of architectures rather than of recipes.
 
 CHECKPOINT SELECTION is by validation AP under free running (teacher forcing
@@ -25,7 +24,7 @@ Everything here is execution-level. None of it changes a number: same maths,
 same order of operations, same result bit for bit.
 
   loss accumulated on the GPU   `loss.item()` inside the step loop forces a
-                                device sync every iteration -- the GPU stops
+                                device sync every iteration, so the GPU stops
                                 and waits for the CPU thousands of times per
                                 epoch. Accumulated in a device tensor and read
                                 once per epoch instead.
@@ -40,7 +39,7 @@ same order of operations, same result bit for bit.
   non_blocking transfers        with pinned memory, the copy overlaps compute.
   zero_grad(set_to_none=True)   frees gradient buffers instead of zeroing them.
 
-NOT done, on purpose -- each of these WOULD change results:
+NOT done, on purpose. Each of these WOULD change results:
 
   mixed precision (AMP)         fp16/bf16 accumulation changes the numbers. It
                                 is the single biggest speedup available and it
@@ -84,7 +83,7 @@ ALL_MODELS = SINGLE_STEP | {"utae_ar", "utae_ar4"}
 LOSSES = ("focal", "bce_dice", "bce", "dice", "jaccard")
 
 
-# --------------------------------------------------------------------- model
+# model
 def build_model(name: str, horizon: int, in_ch: int = N_CHANNELS, patch: int = PATCH):
     """Instantiate with the paper's architecture hyper-parameters."""
     if name == "unet":
@@ -119,7 +118,7 @@ def last_real_frame(X):
     `collate_padded` pads short histories with zero frames at the END of the
     sequence, so `X[:, -1]` is the day-t frame only for the samples that happen
     to be the longest in their batch. Measured on splits_v4_s23, 68% of test
-    samples get an all-zero image that way -- the static models were being
+    samples get an all-zero image that way, and the static models were being
     scored on a blank input two times out of three.
 
     AFSeq histories are variable by construction (`seq_dates = dates[max(0,
@@ -127,7 +126,7 @@ def last_real_frame(X):
     have fewer than the 16-day maximum.
     """
     # same criterion as with_vegfolds/cross_table.py:last_real_frame, which
-    # evaluation already used -- only training was still reading X[:, -1]
+    # evaluation already used; only training was still reading X[:, -1]
     nz = (X.reshape(*X.shape[:2], -1).abs().sum(-1) > 0)       # (B,T)
     last = (nz.shape[1] - 1 - nz.flip(1).float().argmax(1)).clamp(min=0)
     return X[torch.arange(X.shape[0], device=X.device), last]
@@ -183,7 +182,7 @@ def to_logits(out, name):
     return out
 
 
-# ---------------------------------------------------------------- validation
+# validation
 @torch.no_grad()
 def val_ap(model, name, loader, dev, horizon, max_batches=0):
     """Pooled AP at t+1 on validation, free running. Everything stays on GPU."""
@@ -210,7 +209,7 @@ def val_ap(model, name, loader, dev, horizon, max_batches=0):
     return pooled_ap_gpu(torch.cat(ys), torch.cat(ps), device=dev)
 
 
-# --------------------------------------------------------------------- main
+# main
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--model", required=True, choices=sorted(ALL_MODELS))
@@ -229,9 +228,9 @@ def main():
     ap.add_argument("--max-history", type=int, default=16)
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--tf-mode", default="linear", choices=["linear", "ss", "none"],
-                    help="teacher forcing: lineal 1.0->0.5, scheduled sampling, "
-                         "o ninguno. Solo aplica a utae_ar")
-    ap.add_argument("--k", type=float, default=3.0, help="k del scheduled sampling")
+                    help="teacher forcing: linear 1.0 to 0.5, scheduled "
+                         "sampling, or none. Only applies to utae_ar")
+    ap.add_argument("--k", type=float, default=3.0, help="k of the scheduled sampling schedule")
     ap.add_argument("--benchmark", default="afseq",
                     choices=["afseq", "wstsplus", "fused"],
                     help="which dataset to train on. wstsplus goes through "
@@ -263,12 +262,12 @@ def main():
                          "windows, and those are 57%% of the fold-0 test set")
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--max-steps-per-epoch", type=int, default=0,
-                    help="corta la epoca tras N pasos. Solo para comprobar que "
-                         "un modelo arranca; 0 = epoca completa")
+                    help="stop the epoch after N steps. Only to check that a "
+                         "model starts at all; 0 = full epoch")
     ap.add_argument("--max-val-batches", type=int, default=0,
-                    help="corta la validacion tras N lotes. Solo para smoke "
-                         "tests: sin esto una prueba de 3 pasos tarda lo que "
-                         "tarde la validacion entera. 0 = completa")
+                    help="stop validation after N batches. Only for smoke "
+                         "tests: without it a 3-step run still pays for the "
+                         "whole validation pass. 0 = full")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--tag-extra", default="")
     args = ap.parse_args()
@@ -308,7 +307,7 @@ def main():
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    # ---- data ------------------------------------------------------------
+    # data
     from dataset import afseq_loader
     from dataset.afseq_loader import (Seq2SeqActivePadded, collate_padded,
                                       dl_ids, load_ids)
@@ -334,7 +333,7 @@ def main():
         coll = collate
         in_ch = N_VEG
     elif args.benchmark == "wstsplus":
-        # Their data, their loader, our windowing -- see
+        # Their data, their loader, our windowing. See
         # benchmarks/wstsplus_data.py for the three axes it declares.
         sys.path.insert(0, str(ROOT / "benchmarks"))
         from wstsplus_data import FEATURES, collate_wstsplus, make_dataset

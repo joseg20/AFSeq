@@ -1,4 +1,4 @@
-# evaluation/ — how things are measured
+# evaluation/: how things are measured
 
 One implementation of the measurement protocol, shared by every experiment.
 Reimplementing this per experiment is how you end up with two numbers for the
@@ -8,13 +8,13 @@ protocol.
 
 ## metrics.py
 
-`pooled_ap_gpu(y, s)` — pooled average precision, computed on the GPU.
+`pooled_ap_gpu(y, s)` is pooled average precision, computed on the GPU.
 
 Same definition as `sklearn.metrics.average_precision_score`, ties collapsed the
 same way, verified equivalent on float16, sparse and saturated inputs (worst
 difference 4.4e-08, far below any digit we report).
 
-Measured on one fold's worth of data — 80M pixels, the real size:
+Measured on one fold's worth of data, 80M pixels, which is the real size:
 
 | | tiempo | AP |
 |---|---|---|
@@ -25,7 +25,7 @@ Measured on one fold's worth of data — 80M pixels, the real size:
 held 16 threads while the GPU sat at 4%: sorting 80M values is what a GPU is
 for. Peak VRAM 3.2 GB, nothing on an 80 GB card.
 
-Nine files of the previous release computed AP with sklearn — including both
+Nine files of the previous release computed AP with sklearn, including both
 training loops, where it runs once per validation pass. They should all call
 this instead.
 

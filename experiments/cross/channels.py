@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The shared channel space the two benchmarks are fused in.
 
 WHY VEG. AFSeq has 34 channels, WSTS+ has 40, and they are not subsets of one
@@ -60,8 +59,9 @@ def afseq_to_veg(x: torch.Tensor, mean, std, drop_refl: bool = False):
     """(..., 35, h, w) AFSeq (with the hour) -> (..., 7, h, w) in the Veg space.
 
     drop_refl blanks the two reflectance slots instead of mapping them. In the
-    v1 release those AFSeq channels are ~76% zeros -- the VNP09GA v001 product
-    they came from was retired -- so after z-scoring they are nearly constant
+    v1 release those AFSeq channels are ~76% zeros, because the VNP09GA v001
+    product they came from was retired, so after z-scoring they are nearly
+    constant
     (train std 0.064 and 0.076 on a 0..1 range) and carry almost no signal,
     while WSTS has real data there. Neither choice is clean: mapping them feeds
     near-constant noise into channels the other benchmark fills with signal,

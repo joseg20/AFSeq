@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Train the WSTS+ models on AFSeq, with their configuration and their code.
 
     python train_afseq_theirs.py --model utae_res18 --features veg
@@ -8,15 +7,15 @@ The model, the loss, the optimiser, the training/validation/test steps and the
 AP metric all come from the WSTS+ repository, unmodified: this file only builds
 their LightningModule, hands it the AFSeq data module, and runs their Trainer.
 It replaces their `src/train.py`, which cannot be reused as-is because it is
-WSTS-specific in two places -- `before_instantiate_classes` derives n_channels
+WSTS-specific in two places. `before_instantiate_classes` derives n_channels
 and pos_class_weight from `FireSpreadDataset`/`FireSpreadDataModule`, and
 `wandb_setup` assumes a wandb sweep agent created the run.
 
 THEIR CONFIGURATION, and where each value comes from
 ----------------------------------------------------
-Every sweep that produces a published number -- the five cfgs/unet/saad/
+Every sweep that produces a published number, the five cfgs/unet/saad/
 table_5_*.yaml behind their Table 5, and wandb_all_sweep_jake_kube.yaml for
-WSTS+ -- passes `-c cfgs/unet/res18_monotemporal.yaml`. So their configuration
+WSTS+, passes `-c cfgs/unet/res18_monotemporal.yaml`. So their configuration
 is that file, and nothing else:
 
     encoder            resnet18, encoder_weights=imagenet
@@ -30,7 +29,7 @@ is that file, and nothing else:
     cfgs/unet/saad/res18_multitemporal.yaml says Dice and omits imagenet, and
     PROTOCOLO.md:311 followed it. It is an orphan: no sweep references it. The
     "Dice" default in load_trained_model.py is an argparse default for a script
-    that only rebuilds a model to run a dummy forward pass -- the loss is not
+    that only rebuilds a model to run a dummy forward pass. The loss is not
     part of a state_dict and that default says nothing about training. Their
     paper settles it: "we included both pre-training and focal loss in all our
     models", with an ablation (their Tab. 1) where removing focal loss costs
@@ -96,7 +95,7 @@ def build(model_name: str, dm: AFSeqDataModule):
     if model_name == "utae_res18":
         # feature-level fusion: LTAE over the temporal axis, T kept.
         # SMPTempModelPadded is their SMPTempModel plus the pad mask AFSeq's
-        # variable-length fires require -- see afseq_models.py.
+        # variable-length fires require. See afseq_models.py.
         from afseq_models import SMPTempModelPadded
         return SMPTempModelPadded(n_channels=dm.n_channels_per_step,
                                   flatten_temporal_dimension=False, **common)

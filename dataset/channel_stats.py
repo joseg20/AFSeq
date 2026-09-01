@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Per-channel statistics of the TRAIN split, two files, one pass.
 
     python dataset/channel_stats.py [--days 3000] [--splits <file>]
@@ -45,7 +44,7 @@ def main():
             for p in sorted((Path(AFSEQ) / f).glob("*/active-fire.tif"))]
     random.seed(a.seed)
     days = random.sample(days, min(a.days, len(days)))
-    print(f"{len(ids)} fuegos de Train, {len(days)} dias muestreados")
+    print(f"{len(ids)} Train fires, {len(days)} days sampled")
 
     C = L.N_CHANNELS
     raw_sum = np.zeros(C); raw_n = np.zeros(C)          # before imputation
